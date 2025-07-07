@@ -201,6 +201,8 @@ auditvia/
 
 <!-- Trigger workflow: testing GitHub Actions smoke test -->
 
+<!-- Testing smoke test workflow execution -->
+
 ## Documentation
 
 - [`docs/deploy.md`](./docs/deploy.md) - Complete production deployment guide
