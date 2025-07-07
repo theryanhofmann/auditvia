@@ -22,32 +22,101 @@ export function DashboardClient() {
     try {
       setScanningSiteId(siteId)
 
-      const response = await fetch('/api/scan', {
+      // Get the site URL for the scan
+      const site = sites.find(s => s.id === siteId)
+      if (!site) {
+        throw new Error('Site not found')
+      }
+
+      // Step 1: Start the scan
+      const auditResponse = await fetch('/api/audit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          siteId,
+          url: site.url,
+          siteId: siteId,
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to run scan')
+      if (!auditResponse.ok) {
+        const errorData = await auditResponse.json()
+        throw new Error(errorData.error || 'Failed to start scan')
       }
 
-      const data = await response.json()
+      const auditData = await auditResponse.json()
       
-      toast.success(`Scan completed! Score: ${data.scan?.score}/100`)
-      
-      // Refresh sites data to get updated scan results
-      refresh()
+      if (auditData.success && auditData.data?.scan?.id) {
+        const scanId = auditData.data.scan.id
+        
+        // If scan completed immediately (mock mode), show results
+        if (auditData.data.scan.status === 'completed') {
+          const score = auditData.summary?.score || auditData.data.scan.score
+          const violationsCount = auditData.summary?.violations || 0
+          toast.success(`Scan completed! Score: ${score}/100 (${violationsCount} issues found)`)
+          refresh()
+          return
+        }
+        
+        // Step 2: Poll for completion if scan is pending
+        await pollScanCompletion(scanId)
+      } else {
+        throw new Error('Invalid scan response')
+      }
     } catch (error) {
       console.error('Error running scan:', error)
-      toast.error('Failed to run scan')
+      toast.error(error instanceof Error ? error.message : 'Failed to run scan')
     } finally {
       setScanningSiteId(null)
     }
+  }
+
+  const pollScanCompletion = async (scanId: string, maxAttempts: number = 30) => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch('/api/audit-results', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ scanId }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          const scan = result.scan
+          
+          if (scan?.status === 'completed') {
+            const score = scan.score || 0
+            const issuesCount = scan.issues?.length || scan.total_violations || 0
+            toast.success(`Scan completed! Score: ${score}/100 (${issuesCount} issues found)`)
+            refresh()
+            return
+          }
+          
+          if (scan?.status === 'failed' || scan?.status === 'error') {
+            throw new Error(`Scan failed with status: ${scan.status}`)
+          }
+          
+          // Still pending, continue polling
+          if (attempt < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
+          }
+        } else {
+          throw new Error('Failed to fetch scan status')
+        }
+      } catch (error) {
+        console.error(`Polling attempt ${attempt} failed:`, error)
+        if (attempt === maxAttempts) {
+          throw new Error('Scan timed out - please check results manually')
+        }
+        // Continue polling on error unless it's the last attempt
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+    }
+    
+    throw new Error('Scan timed out after maximum attempts')
   }
 
   const handleToggleMonitoring = async (siteId: string, enabled: boolean) => {
