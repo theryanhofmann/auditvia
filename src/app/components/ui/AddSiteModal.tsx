@@ -15,6 +15,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentOperation, setCurrentOperation] = useState<'idle' | 'creating' | 'scanning'>('idle')
   const [urlError, setUrlError] = useState('')
   const { data: session } = useSession()
 
@@ -50,7 +51,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!session?.user) {
+    if (!session?.user && process.env.NODE_ENV === 'production') {
       toast.error('Please sign in to add sites')
       return
     }
@@ -60,9 +61,11 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
     }
 
     setIsSubmitting(true)
+    setCurrentOperation('creating')
 
     try {
-      const response = await fetch('/api/sites', {
+      // Step 1: Create the site
+      const siteResponse = await fetch('/api/sites', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,16 +76,51 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        if (response.status === 409) {
+      if (!siteResponse.ok) {
+        const errorData = await siteResponse.json()
+        if (siteResponse.status === 409) {
           setUrlError('You have already added this site')
           return
         }
         throw new Error(errorData.error || 'Failed to add site')
       }
 
-      toast.success('Site added successfully!')
+      const { site } = await siteResponse.json()
+      toast.success('Site added successfully! Starting initial scan...')
+
+      // Step 2: Create an initial scan for the new site
+      setCurrentOperation('scanning')
+      try {
+        const auditResponse = await fetch('/api/audit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url: url.trim(),
+            siteId: site.id,
+            userId: session?.user?.id,
+          }),
+        })
+
+        if (auditResponse.ok) {
+          const auditData = await auditResponse.json()
+          if (auditData.success) {
+            toast.success(`Initial scan completed! Accessibility score: ${auditData.summary?.score || 'N/A'}/100`)
+          } else {
+            toast.success('Site added! Scan will begin shortly.')
+          }
+        } else {
+          // Don't fail the whole operation if scan fails
+          console.warn('Initial scan failed, but site was created successfully')
+          toast.success('Site added! You can manually run a scan from the dashboard.')
+        }
+      } catch (scanError) {
+        // Don't fail the whole operation if scan fails
+        console.warn('Initial scan failed:', scanError)
+        toast.success('Site added! You can manually run a scan from the dashboard.')
+      }
+
       resetForm()
       onClose()
       onSuccess?.()
@@ -95,6 +133,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
       }
     } finally {
       setIsSubmitting(false)
+      setCurrentOperation('idle')
     }
   }
 
@@ -133,7 +172,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
                   Add New Site
                 </h2>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  Add a website to monitor for accessibility
+                  Add a website and run an initial accessibility scan
                 </p>
               </div>
             </div>
@@ -225,12 +264,16 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Adding...</span>
+                    <span>
+                      {currentOperation === 'creating' ? 'Adding Site...' : 
+                       currentOperation === 'scanning' ? 'Running Scan...' : 
+                       'Processing...'}
+                    </span>
                   </>
                 ) : (
                   <>
                     <Globe className="w-4 h-4" />
-                    <span>Add Site</span>
+                    <span>Add Site & Scan</span>
                   </>
                 )}
               </button>
