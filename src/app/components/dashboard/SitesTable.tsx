@@ -69,7 +69,7 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite,
       case 'queued':
         return 'Queued'
       default:
-        return 'Idle'
+        return 'Ready to scan'
     }
   }
 
@@ -143,10 +143,18 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite,
                 </div>
               </td>
               <td className="py-4 px-6">
-                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreBg(site.score)}`}>
-                  <span className={getScoreColor(site.score)}>
-                    {site.score !== null && site.score !== undefined ? `${site.score}/100` : 'Not scanned'}
-                  </span>
+                <div className="flex items-center space-x-2">
+                  <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreBg(site.score)}`}>
+                    <span className={getScoreColor(site.score)}>
+                      {site.score !== null && site.score !== undefined ? `${site.score}/100` : 'Not scanned'}
+                    </span>
+                  </div>
+                  {site.score !== null && site.score !== undefined && site.score < 100 && (
+                    <div className="flex items-center text-xs text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      <span>Issues found</span>
+                    </div>
+                  )}
                 </div>
               </td>
               <td className="py-4 px-6">
@@ -177,7 +185,11 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite,
                     onClick={() => onRunScan(site.id)}
                     disabled={isScanning === site.id || site.status === 'scanning'}
                     className="p-2 text-gray-400 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title={isScanning === site.id ? "Scanning..." : "Run scan"}
+                    title={
+                      isScanning === site.id ? "Scanning in progress..." : 
+                      site.status === 'scanning' ? "Scan in progress..." :
+                      "Run accessibility scan"
+                    }
                   >
                     {isScanning === site.id ? (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
