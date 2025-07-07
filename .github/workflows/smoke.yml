@@ -10,70 +10,72 @@ jobs:
   smoke-test:
     name: E2E Smoke Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-          
+
       - name: Install dependencies
         run: npm ci
-        
+
       - name: Create environment file
         run: |
-          # Create .env.local from example if it exists, or create new file
           if [ -f .env.example ]; then
             cp .env.example .env.local
           else
             touch .env.local
           fi
-          
-          # Set required environment variables for CI
-          echo "DEV_NO_ADMIN=true" >> .env.local
-          echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env.local
-          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.local
-          echo "NEXTAUTH_URL=http://localhost:3000" >> .env.local
-          echo "NEXTAUTH_SECRET=test-secret-for-ci" >> .env.local
-          echo "GITHUB_ID=test-github-id" >> .env.local
-          echo "GITHUB_SECRET=test-github-secret" >> .env.local
-          
+
+                      echo "DEV_NO_ADMIN=true" >> .env.local
+            echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env.local
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env.local
+            echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.local
+            echo "NEXTAUTH_URL=http://localhost:3000" >> .env.local
+            echo "NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}" >> .env.local
+            echo "GITHUB_ID=${{ secrets.GH_OAUTH_ID }}" >> .env.local
+            echo "GITHUB_SECRET=${{ secrets.GH_OAUTH_SECRET }}" >> .env.local
+
       - name: Build application
         run: npm run build
-        
+
       - name: Clear port 3000
         run: |
-          # Kill any process using port 3000
           lsof -ti:3000 | xargs kill -9 || true
-          
+
       - name: Start development server
         run: npm run dev &
-        
+
       - name: Wait for server to be ready
         run: |
           echo "Waiting for development server to start..."
           timeout 120 bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done'
           echo "Server is ready!"
-          
+
       - name: Run smoke test
         run: NODE_ENV=development npm exec tsx scripts/e2e-smoke.ts
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          GITHUB_ID: ${{ secrets.GH_OAUTH_ID }}
+          GITHUB_SECRET: ${{ secrets.GH_OAUTH_SECRET }}
           DEV_NO_ADMIN: true
-          
+
       - name: Kill development server
         if: always()
         run: |
           pkill -f "next dev" || true
-          
+
       - name: Upload test artifacts (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -83,4 +85,4 @@ jobs:
             .env.local
             package.json
             package-lock.json
-          retention-days: 7 
+          retention-days: 7
