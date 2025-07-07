@@ -1,5 +1,9 @@
 # Auditvia
 
+![Smoke Test](https://github.com/theryanhofmann/auditvia/actions/workflows/smoke.yml/badge.svg)
+
+Automated CI smoke tests triggered on push to `main`. Ensures end-to-end functionality passes without auth or DB dependencies in DEV mode.
+
 A sleek, modern web application that helps developers and teams audit their websites for accessibility (ADA / WCAG compliance). The platform scans URLs, detects accessibility issues, and provides actionable insights with automated monitoring. 
 
 ## Features
