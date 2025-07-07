@@ -15,6 +15,7 @@ export async function GET() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           user_id: 'test-user',
+          monitoring: false,
           latest_score: 85,
           latest_scan_at: new Date().toISOString()
         }
@@ -40,6 +41,7 @@ export async function GET() {
         created_at,
         updated_at,
         user_id,
+        monitoring,
         scans (
           score,
           created_at
@@ -78,7 +80,8 @@ export async function POST(request: NextRequest) {
         name: 'Test Site',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        user_id: 'test-user'
+        user_id: 'test-user',
+        monitoring: false
       }
     }, { status: 201 })
   }

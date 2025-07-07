@@ -80,7 +80,7 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite,
           <AlertTriangle className="w-8 h-8 text-gray-400" />
         </div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          No websites yet
+          No sites added yet
         </h3>
         <p className="text-gray-600 dark:text-gray-400">
           Add your first website to start monitoring accessibility

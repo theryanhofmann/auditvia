@@ -27,7 +27,7 @@ const fetcher = async (url: string): Promise<Site[]> => {
       last_scan: site.latest_scan_at,
       created_at: site.created_at,
       updated_at: site.updated_at,
-      monitoring: false, // We'll implement this later
+      monitoring: site.monitoring || false,
       user_id: site.user_id,
       latest_audit_result_id: null // We'll implement this later if needed
     }
