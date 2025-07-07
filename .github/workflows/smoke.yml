@@ -21,15 +21,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
-          
-      - name: Setup pnpm
-        run: |
-          corepack enable pnpm
-          corepack prepare pnpm@8 --activate
+          cache: 'npm'
           
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
         
       - name: Create environment file
         run: |
@@ -50,10 +45,10 @@ jobs:
           echo "GITHUB_SECRET=test-github-secret" >> .env.local
           
       - name: Build application
-        run: pnpm run build
+        run: npm run build
         
       - name: Start development server
-        run: pnpm run dev &
+        run: npm run dev &
         
       - name: Wait for server to be ready
         run: |
@@ -62,7 +57,7 @@ jobs:
           echo "Server is ready!"
           
       - name: Run smoke test
-        run: NODE_ENV=development pnpm exec tsx scripts/e2e-smoke.ts
+        run: NODE_ENV=development npx tsx scripts/e2e-smoke.ts
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
