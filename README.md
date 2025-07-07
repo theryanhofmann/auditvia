@@ -1,6 +1,6 @@
 # Auditvia
 
-A sleek, modern web application that helps developers and teams audit their websites for accessibility (ADA / WCAG compliance). The platform scans URLs, detects accessibility issues, and provides actionable insights with automated monitoring.
+A sleek, modern web application that helps developers and teams audit their websites for accessibility (ADA / WCAG compliance). The platform scans URLs, detects accessibility issues, and provides actionable insights with automated monitoring. 
 
 ## Features
 
@@ -198,6 +198,8 @@ auditvia/
 ├── scripts/                   # Database migrations
 └── docs/                     # Additional documentation
 ```
+
+<!-- Trigger workflow: testing GitHub Actions smoke test -->
 
 ## Documentation
 
