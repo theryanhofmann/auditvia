@@ -17,6 +17,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
     }
 
+    // DEV_NO_ADMIN bypass for testing
+    if (process.env.DEV_NO_ADMIN === 'true') {
+      // Run mock accessibility audit
+      const auditResults = await runAccessibilityAudit(url)
+      const score = calculateScore(auditResults.violations)
+      
+      const bySeverity = {
+        critical: auditResults.violations.filter(v => v.impact === 'critical').length,
+        serious: auditResults.violations.filter(v => v.impact === 'serious').length,
+        moderate: auditResults.violations.filter(v => v.impact === 'moderate').length,
+        minor: auditResults.violations.filter(v => v.impact === 'minor').length,
+      }
+
+      // Return mock scan data
+      const mockScan = {
+        id: `scan-${Date.now()}`,
+        site_id: siteId || `site-${Date.now()}`,
+        score,
+        status: 'completed',
+        started_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const mockSite = {
+        id: siteId || `site-${Date.now()}`,
+        url,
+        name: getHostname(url),
+        user_id: userId || 'test-user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        monitoring_enabled: false,
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          site: mockSite,
+          scan: mockScan,
+        },
+        summary: {
+          score,
+          violations: auditResults.violations.length,
+          by_severity: bySeverity,
+        },
+      })
+    }
+
     // Check for service key header (from Edge Function)
     const serviceKey = request.headers.get('x-service-key')
     const expectedServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

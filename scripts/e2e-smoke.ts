@@ -139,7 +139,7 @@ class SmokeTest {
 
     const result = await response.json()
     return {
-      id: result.data?.auditResult?.id || result.scanId || result.id,
+      id: result.data?.scan?.id || result.scanId || result.id,
       status: 'pending'
     }
   }
@@ -155,7 +155,10 @@ class SmokeTest {
       console.log(`   Attempt ${attempts}/${maxAttempts} - Checking scan status...`)
 
       try {
-        const response = await this.apiCall(`/api/audit-results?scanId=${scanId}`)
+        const response = await this.apiCall('/api/audit-results', {
+          method: 'POST',
+          body: JSON.stringify({ scanId })
+        })
         
         if (response.ok) {
           const result = await response.json()
@@ -192,7 +195,10 @@ class SmokeTest {
     
     if (!response.ok) {
       // Try alternative endpoint
-      const altResponse = await this.apiCall(`/api/audit-results?scanId=${scanId}`)
+      const altResponse = await this.apiCall('/api/audit-results', {
+        method: 'POST',
+        body: JSON.stringify({ scanId })
+      })
       
       if (!altResponse.ok) {
         throw new Error(`Failed to fetch report: ${response.statusText}`)
@@ -201,7 +207,7 @@ class SmokeTest {
       const result = await altResponse.json()
       
       // Check for issues in the response
-      const issues = result.data?.raw_violations || result.issues || result.violations || []
+      const issues = result.scan?.issues || result.data?.raw_violations || result.issues || result.violations || []
       
       if (!Array.isArray(issues) || issues.length === 0) {
         throw new Error('Report validation failed: No accessibility issues found (expected at least some issues for example.com)')
