@@ -3,7 +3,7 @@ import { ReactNode } from 'react'
 interface GridProps {
   children: ReactNode
   cols?: 1 | 2 | 3 | 4 | 5 | 6
-  gap?: 'sm' | 'md' | 'lg' | 'xl'
+  gap?: 'sm' | 'md' | 'lg' | 'xl' | '6'
   className?: string
 }
 
@@ -21,6 +21,7 @@ const gapMap = {
   md: 'gap-4',
   lg: 'gap-6',
   xl: 'gap-8',
+  '6': 'gap-6',
 }
 
 export function Grid({ children, cols = 1, gap = 'md', className = '' }: GridProps) {

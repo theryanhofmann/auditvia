@@ -1,0 +1,12 @@
+{
+  "css.validate": false,
+  "scss.validate": false,
+  "less.validate": false,
+  "tailwindCSS.includeLanguages": {
+    "css": "css"
+  },
+  "css.customData": [".vscode/css_custom_data.json"],
+  "editor.quickSuggestions": {
+    "strings": true
+  }
+} 
