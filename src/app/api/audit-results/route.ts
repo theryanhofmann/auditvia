@@ -1,82 +1,123 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/app/lib/supabase/server'
+import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const siteId = searchParams.get('siteId')
-    const userId = searchParams.get('userId')
-    const limit = parseInt(searchParams.get('limit') || '10', 10)
-    const offset = parseInt(searchParams.get('offset') || '0', 10)
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const limit = parseInt(searchParams.get('limit') || '50')
 
-    let query = supabaseAdmin
-      .from('audit_results')
-      .select('*')
+    // Get Supabase client (admin or regular based on DEV_NO_ADMIN flag)
+    const supabase = await getSupabaseClient()
+    if (!supabase) {
+      return createAdminDisabledResponse()
+    }
+
+    let query = supabase
+      .from('scans')
+      .select(`
+        id,
+        site_id,
+        score,
+        status,
+        created_at,
+        finished_at,
+        sites!inner (
+          id,
+          url,
+          name
+        )
+      `)
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+      .limit(limit)
 
-    // Filter by site if provided
     if (siteId) {
       query = query.eq('site_id', siteId)
     }
 
-    // Filter by user if provided
-    if (userId) {
-      query = query.eq('user_id', userId)
+    if (startDate) {
+      query = query.gte('created_at', startDate)
     }
 
-    const { data: auditResults, error } = await query
+    if (endDate) {
+      query = query.lte('created_at', endDate)
+    }
+
+    const { data: scans, error } = await query
 
     if (error) {
       console.error('Error fetching audit results:', error)
       return NextResponse.json({ error: 'Failed to fetch audit results' }, { status: 500 })
     }
 
-    return NextResponse.json({ auditResults })
-
+    return NextResponse.json({ scans: scans || [] })
   } catch (error) {
-    console.error('Audit results API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('Error in GET /api/audit-results:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { site_id, url, score, violations, by_severity, raw_violations, userId } = await request.json()
+    const { scanId } = await request.json()
 
-    if (!site_id || !url || score === undefined || violations === undefined) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!scanId) {
+      return NextResponse.json({ error: 'scanId is required' }, { status: 400 })
     }
 
-    const { data: auditResult, error } = await supabaseAdmin
-      .from('audit_results')
-      .insert({
+    // Get Supabase client (admin or regular based on DEV_NO_ADMIN flag)
+    const supabase = await getSupabaseClient()
+    if (!supabase) {
+      return createAdminDisabledResponse()
+    }
+
+    // Fetch scan details with associated issues
+    const { data: scan, error: scanError } = await supabase
+      .from('scans')
+      .select(`
+        id,
         site_id,
-        url,
         score,
-        violations,
-        by_severity,
-        raw_violations,
-        user_id: userId || null,
-      })
-      .select()
+        status,
+        created_at,
+        finished_at,
+        sites!inner (
+          id,
+          url,
+          name
+        ),
+        issues (
+          id,
+          rule,
+          selector,
+          severity,
+          impact,
+          description,
+          help_url,
+          html
+        )
+      `)
+      .eq('id', scanId)
       .single()
 
-    if (error) {
-      console.error('Error creating audit result:', error)
-      return NextResponse.json({ error: 'Failed to create audit result' }, { status: 500 })
+    if (scanError) {
+      console.error('Error fetching scan:', scanError)
+      return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ auditResult })
+    // Return scan data with issues (no need to insert, data already exists)
 
+    return NextResponse.json({ 
+      success: true,
+      scan: {
+        ...scan,
+        total_violations: scan.issues?.length || 0
+      }
+    })
   } catch (error) {
-    console.error('Audit results API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('Error in POST /api/audit-results:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

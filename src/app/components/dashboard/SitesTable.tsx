@@ -10,15 +10,17 @@ import {
   Clock,
   XCircle
 } from 'lucide-react'
+import { Switch } from '@/app/components/ui/switch'
 
 interface SitesTableProps {
   sites: Site[]
-  onRunScan: (siteId: string) => void
-  onToggleMonitoring: (siteId: string, monitoring: boolean) => void
+  onRunScan: (siteId: string) => Promise<void>
+  onToggleMonitoring: (siteId: string, enabled: boolean) => Promise<void>
   onDeleteSite: (siteId: string) => void
+  isScanning?: string | null // Track which site is currently scanning
 }
 
-export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite }: SitesTableProps) {
+export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite, isScanning }: SitesTableProps) {
   const getScoreColor = (score: number | null | undefined) => {
     if (score === null || score === undefined) return 'text-gray-500'
     if (score >= 90) return 'text-green-600 dark:text-green-400'
@@ -35,10 +37,13 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite 
     return 'bg-red-50 dark:bg-red-900/20'
   }
 
-  const getStatusIcon = (status: string | null | undefined) => {
+  const getStatusIcon = (status: string | null | undefined, siteId: string) => {
+    // Show scanning if this specific site is being scanned
+    if (isScanning === siteId || status === 'scanning') {
+      return <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+    }
+    
     switch (status) {
-      case 'scanning':
-        return <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-600"></div>
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-600" />
       case 'error':
@@ -50,10 +55,13 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite 
     }
   }
 
-  const getStatusText = (status: string | null | undefined) => {
+  const getStatusText = (status: string | null | undefined, siteId: string) => {
+    // Show scanning if this specific site is being scanned
+    if (isScanning === siteId || status === 'scanning') {
+      return 'Scanning...'
+    }
+    
     switch (status) {
-      case 'scanning':
-        return 'Scanning...'
       case 'completed':
         return 'Completed'
       case 'error':
@@ -126,7 +134,7 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite 
                         href={site.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-2 hover:text-brand-600"
+                        className="ml-2 hover:text-blue-600 transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                       </a>
@@ -143,9 +151,9 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite 
               </td>
               <td className="py-4 px-6">
                 <div className="flex items-center">
-                  {getStatusIcon(site.status)}
+                  {getStatusIcon(site.status, site.id)}
                   <span className="ml-2 text-sm text-gray-900 dark:text-gray-100">
-                    {getStatusText(site.status)}
+                    {getStatusText(site.status, site.id)}
                   </span>
                 </div>
               </td>
@@ -158,34 +166,30 @@ export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite 
                 </div>
               </td>
               <td className="py-4 px-6">
-                <button
-                  onClick={() => onToggleMonitoring(site.id, !site.monitoring)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 ${
-                    site.monitoring ? 'bg-brand-600' : 'bg-gray-200 dark:bg-gray-700'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      site.monitoring ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                <Switch
+                  checked={site.monitoring}
+                  onCheckedChange={(checked) => onToggleMonitoring(site.id, checked)}
+                />
               </td>
               <td className="py-4 px-6">
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => onRunScan(site.id)}
-                    disabled={site.status === 'scanning'}
-                    className="p-2 text-gray-400 hover:text-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Run scan"
+                    disabled={isScanning === site.id || site.status === 'scanning'}
+                    className="p-2 text-gray-400 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title={isScanning === site.id ? "Scanning..." : "Run scan"}
                   >
-                    <Play className="w-4 h-4" />
+                    {isScanning === site.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
                   </button>
                   
                   {site.latest_audit_result_id && (
                     <button
                       onClick={() => window.open(`/sites/${site.id}/report/${site.latest_audit_result_id}`, '_blank')}
-                      className="p-2 text-gray-400 hover:text-brand-600"
+                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
                       title="View report"
                     >
                       <Eye className="w-4 h-4" />

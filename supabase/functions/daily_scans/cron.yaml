@@ -1,0 +1,3 @@
+name: daily_scans
+schedule: "0 2 * * *"  # Run daily at 02:00 UTC
+description: "Automated daily accessibility scans for monitored sites" 

@@ -58,12 +58,12 @@ export default function Home() {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-8 leading-tight">
-            Make the web{' '}
+              Make the web{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-violet-400 to-blue-500 animate-pulse">
-              accessible
-            </span>{' '}
-            for everyone
-          </h1>
+                accessible
+              </span>{' '}
+              for everyone
+            </h1>
           
           <p className="text-xl md:text-2xl leading-relaxed text-zinc-300 max-w-4xl mx-auto mb-12 font-light">
             Auditvia helps you identify and fix accessibility issues on your websites. 
@@ -104,7 +104,7 @@ export default function Home() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => {
+            {features.map((feature) => {
               const Icon = feature.icon
               return (
                 <div
@@ -116,16 +116,16 @@ export default function Home() {
                     <div className="flex items-center mb-6">
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500/20 to-violet-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <Icon className="w-6 h-6 text-blue-400 group-hover:text-blue-300 transition-colors duration-300" />
-                      </div>
-                    </div>
+              </div>
+            </div>
                     <h3 className="text-xl font-bold text-white mb-4 group-hover:text-blue-100 transition-colors duration-300">
                       {feature.title}
-                    </h3>
+                </h3>
                     <p className="text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors duration-300">
                       {feature.description}
-                    </p>
-                  </div>
-                </div>
+              </p>
+            </div>
+              </div>
               )
             })}
           </div>
@@ -145,7 +145,7 @@ export default function Home() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {benefits.map((benefit, index) => {
+            {benefits.map((benefit) => {
               const Icon = benefit.icon
               return (
                 <div
@@ -158,15 +158,15 @@ export default function Home() {
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-violet-500/20 to-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <Icon className="w-6 h-6 text-violet-400 group-hover:text-violet-300 transition-colors duration-300" />
                       </div>
-                    </div>
+              </div>
                     <h3 className="text-xl font-bold text-white mb-4 group-hover:text-violet-100 transition-colors duration-300">
                       {benefit.title}
                     </h3>
                     <p className="text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors duration-300">
                       {benefit.description}
                     </p>
-                  </div>
-                </div>
+              </div>
+              </div>
               )
             })}
           </div>

@@ -1,82 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Site } from '@/app/types/dashboard'
+import { useState } from 'react'
 import { StatsPanel } from './dashboard/StatsPanel'
 import { SitesTable } from './dashboard/SitesTable'
+import { AddSiteModal } from './ui/AddSiteModal'
+import { useSites } from '@/app/lib/hooks/useSites'
 import { Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function DashboardClient() {
-  const [sites, setSites] = useState<Site[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [showAddSiteModal, setShowAddSiteModal] = useState(false)
+  const [scanningSiteId, setScanningSiteId] = useState<string | null>(null)
+  const { sites, isLoading, refresh } = useSites()
 
-  const fetchSites = async () => {
-    try {
-      setIsRefreshing(true)
-      const response = await fetch('/api/sites')
-      if (!response.ok) {
-        throw new Error('Failed to fetch sites')
-      }
-      const data = await response.json()
-      setSites(data.sites || [])
-    } catch (error) {
-      console.error('Error fetching sites:', error)
-      toast.error('Failed to load sites')
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchSites()
-  }, [])
-
-  const handleAddSite = async (url: string) => {
-    try {
-      const response = await fetch('/api/sites', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to add site')
-      }
-
-      const data = await response.json()
-      setSites(prev => [data.site, ...prev])
-      toast.success('Site added successfully')
-      setShowAddSiteModal(false)
-    } catch (error) {
-      console.error('Error adding site:', error)
-      toast.error('Failed to add site')
-    }
+  const handleSiteAdded = () => {
+    // Refresh the sites list when a new site is added
+    refresh()
   }
 
   const handleRunScan = async (siteId: string) => {
     try {
-      const site = sites.find(s => s.id === siteId)
-      if (!site) return
+      setScanningSiteId(siteId)
 
-      // Update site status optimistically
-      setSites(prev => prev.map(s => 
-        s.id === siteId ? { ...s, status: 'scanning' } : s
-      ))
-
-      const response = await fetch('/api/audit', {
+      const response = await fetch('/api/scan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: site.url,
-          siteId: site.id,
+          siteId,
         }),
       })
 
@@ -86,48 +38,36 @@ export function DashboardClient() {
 
       const data = await response.json()
       
-      // Update site with scan results
-      setSites(prev => prev.map(s => 
-        s.id === siteId ? { 
-          ...s, 
-          status: 'completed',
-          score: data.summary?.score,
-          last_scan: new Date().toISOString()
-        } : s
-      ))
-
-      toast.success(`Scan completed! Score: ${data.summary?.score}/100`)
+      toast.success(`Scan completed! Score: ${data.scan?.score}/100`)
+      
+      // Refresh sites data to get updated scan results
+      refresh()
     } catch (error) {
       console.error('Error running scan:', error)
-      
-      // Revert site status on error
-      setSites(prev => prev.map(s => 
-        s.id === siteId ? { ...s, status: 'error' } : s
-      ))
-      
       toast.error('Failed to run scan')
+    } finally {
+      setScanningSiteId(null)
     }
   }
 
-  const handleToggleMonitoring = async (siteId: string, monitoring: boolean) => {
+  const handleToggleMonitoring = async (siteId: string, enabled: boolean) => {
     try {
       const response = await fetch(`/api/sites/${siteId}/monitoring`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ monitoring }),
+        body: JSON.stringify({ enabled }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to toggle monitoring')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to toggle monitoring')
       }
 
-      setSites(prev => prev.map(s => 
-        s.id === siteId ? { ...s, monitoring } : s
-      ))
-
-      toast.success(monitoring ? 'Monitoring enabled' : 'Monitoring disabled')
+      await response.json()
+      toast.success(enabled ? 'Monitoring enabled' : 'Monitoring disabled')
+      refresh() // Refresh sites data
     } catch (error) {
       console.error('Error toggling monitoring:', error)
       toast.error('Failed to toggle monitoring')
@@ -144,8 +84,8 @@ export function DashboardClient() {
         throw new Error('Failed to delete site')
       }
 
-      setSites(prev => prev.filter(s => s.id !== siteId))
       toast.success('Site deleted successfully')
+      refresh() // Refresh sites data
     } catch (error) {
       console.error('Error deleting site:', error)
       toast.error('Failed to delete site')
@@ -155,7 +95,7 @@ export function DashboardClient() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
   }
@@ -175,17 +115,17 @@ export function DashboardClient() {
         
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => fetchSites()}
-            disabled={isRefreshing}
-            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+            onClick={refresh}
+            disabled={isLoading}
+            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
           
           <button
             onClick={() => setShowAddSiteModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-brand-600 text-white rounded-md text-sm font-medium hover:bg-brand-700 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Add Site</span>
@@ -212,54 +152,16 @@ export function DashboardClient() {
           onRunScan={handleRunScan}
           onToggleMonitoring={handleToggleMonitoring}
           onDeleteSite={handleDeleteSite}
+          isScanning={scanningSiteId}
         />
       </div>
 
-      {/* Add Site Modal - placeholder */}
-      {showAddSiteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              Add New Site
-            </h3>
-            <form onSubmit={(e) => {
-              e.preventDefault()
-              const formData = new FormData(e.target as HTMLFormElement)
-              const url = formData.get('url') as string
-              if (url) handleAddSite(url)
-            }}>
-              <div className="mb-4">
-                <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Website URL
-                </label>
-                <input
-                  type="url"
-                  id="url"
-                  name="url"
-                  required
-                  placeholder="https://example.com"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-gray-800 dark:text-gray-100"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddSiteModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-md hover:bg-brand-700"
-                >
-                  Add Site
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Add Site Modal */}
+      <AddSiteModal
+        isOpen={showAddSiteModal}
+        onClose={() => setShowAddSiteModal(false)}
+        onSuccess={handleSiteAdded}
+      />
     </div>
   )
 } 

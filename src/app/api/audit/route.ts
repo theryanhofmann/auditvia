@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/app/lib/supabase/server'
-import { Site } from '@/app/types/dashboard'
+import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supabase/server'
+import { Site } from '@/app/types/database'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +15,32 @@ export async function POST(request: NextRequest) {
       new URL(url)
     } catch {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
+    }
+
+    // Check for service key header (from Edge Function)
+    const serviceKey = request.headers.get('x-service-key')
+    const expectedServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    let supabase
+    if (serviceKey && expectedServiceKey && serviceKey === expectedServiceKey) {
+      // Authenticated service call - use admin client directly
+      const { createClient: createSupabaseClient } = await import('@supabase/supabase-js')
+      supabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        }
+      )
+    } else {
+      // Regular client call
+      supabase = await getSupabaseClient()
+      if (!supabase) {
+        return createAdminDisabledResponse()
+      }
     }
 
     // Run accessibility audit using axe-core
@@ -35,12 +61,9 @@ export async function POST(request: NextRequest) {
     let site: Site | null = null
     if (siteId) {
       // Update existing site
-      const { data: updatedSite, error: updateError } = await supabaseAdmin
+      const { data: updatedSite, error: updateError } = await supabase
         .from('sites')
         .update({
-          score,
-          last_scan: new Date().toISOString(),
-          status: 'completed',
           updated_at: new Date().toISOString(),
         })
         .eq('id', siteId)
@@ -54,15 +77,11 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Create new site
-      const { data: newSite, error: createError } = await supabaseAdmin
+      const { data: newSite, error: createError } = await supabase
         .from('sites')
         .insert({
           url,
           name: getHostname(url),
-          score,
-          last_scan: new Date().toISOString(),
-          status: 'completed',
-          monitoring: false,
           user_id: userId || null,
         })
         .select()
@@ -76,44 +95,52 @@ export async function POST(request: NextRequest) {
       site = newSite
     }
 
-    // Save audit result to database
-    const auditResultData = {
-      site_id: site?.id || siteId,
-      url,
-      score,
-      violations: auditResults.violations.length,
-      by_severity: bySeverity,
-      raw_violations: auditResults.violations,
-      user_id: userId || null,
-    }
-
-    const { data: savedAuditResult, error: auditError } = await supabaseAdmin
-      .from('audit_results')
-      .insert(auditResultData)
+    // Create a scan record
+    const { data: scan, error: scanError } = await supabase
+      .from('scans')
+      .insert({
+        site_id: site?.id || siteId,
+        score,
+        status: 'completed',
+        started_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+      })
       .select()
       .single()
 
-    if (auditError) {
-      console.error('Error saving audit result:', auditError)
-      return NextResponse.json({ error: 'Failed to save audit result' }, { status: 500 })
+    if (scanError) {
+      console.error('Error creating scan:', scanError)
+      return NextResponse.json({ error: 'Failed to create scan' }, { status: 500 })
     }
 
-    // Update site with latest audit result ID
-    if (site) {
-      await supabaseAdmin
-        .from('sites')
-        .update({
-          latest_audit_result_id: savedAuditResult.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', site.id)
+    // Create issue records for violations
+    if (auditResults.violations.length > 0) {
+      const issueInserts = auditResults.violations.map(violation => ({
+        scan_id: scan.id,
+        rule: violation.id || 'unknown',
+        selector: violation.nodes?.[0]?.target?.[0] || 'unknown',
+        severity: (violation.impact || 'minor') as 'critical' | 'serious' | 'moderate' | 'minor',
+        impact: (violation.impact || 'minor') as 'critical' | 'serious' | 'moderate' | 'minor' | null,
+        description: violation.description || null,
+        help_url: violation.helpUrl || null,
+        html: violation.nodes?.[0]?.html || null,
+      }))
+
+      const { error: issuesError } = await supabase
+        .from('issues')
+        .insert(issueInserts)
+
+      if (issuesError) {
+        console.error('Error creating issues:', issuesError)
+        // Continue anyway, the scan was created successfully
+      }
     }
 
     return NextResponse.json({
       success: true,
       data: {
         site,
-        auditResult: savedAuditResult,
+        scan,
       },
       summary: {
         score,

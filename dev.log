@@ -1,0 +1,68 @@
+
+> auditvia@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.3.4
+   - Local:        http://localhost:3000
+   - Network:      http://10.0.0.248:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1107ms
+ ✓ Compiled /api/audit in 433ms (478 modules)
+Error creating site: {
+  code: '23502',
+  details: 'Failing row contains (876a83c8-1231-4e04-9611-e314d6583f18, null, https://example.com, example.com, 2025-07-07 08:30:28.621949+00, 2025-07-07 08:30:28.621949+00).',
+  hint: null,
+  message: 'null value in column "user_id" of relation "sites" violates not-null constraint'
+}
+ POST /api/audit 500 in 1011ms
+ POST /api/audit 200 in 621ms
+ POST /api/audit 200 in 503ms
+ ○ Compiling /sites/[siteId]/report/[scanId] ...
+[Error: Can't resolve 'tw-animate-css' in '/Users/ryanhofmann/auditvia/src/app'] {
+  details: "resolve 'tw-animate-css' in '/Users/ryanhofmann/auditvia/src/app'\n" +
+    '  Parsed request is a module\n' +
+    '  using description file: /Users/ryanhofmann/auditvia/package.json (relative path: ./src/app)\n' +
+    '    resolve as module\n' +
+    "      /Users/ryanhofmann/auditvia/src/app/node_modules doesn't exist or is not a directory\n" +
+    "      /Users/ryanhofmann/auditvia/src/node_modules doesn't exist or is not a directory\n" +
+    '      looking for modules in /Users/ryanhofmann/auditvia/node_modules\n' +
+    '        single file module\n' +
+    '          using description file: /Users/ryanhofmann/auditvia/package.json (relative path: ./node_modules/tw-animate-css)\n' +
+    '            no extension\n' +
+    "              /Users/ryanhofmann/auditvia/node_modules/tw-animate-css doesn't exist\n" +
+    '            .css\n' +
+    "              /Users/ryanhofmann/auditvia/node_modules/tw-animate-css.css doesn't exist\n" +
+    "        /Users/ryanhofmann/auditvia/node_modules/tw-animate-css doesn't exist\n" +
+    "      /Users/ryanhofmann/node_modules doesn't exist or is not a directory\n" +
+    "      /Users/node_modules doesn't exist or is not a directory\n" +
+    "      /node_modules doesn't exist or is not a directory"
+}
+ ✓ Compiled /sites/[siteId]/report/[scanId] in 2.1s (1446 modules)
+ GET /sites/9791446b-8d38-4967-8d05-a5f33cf5067e/report/af8d907f-26fe-40eb-940d-64ca642ccc95 404 in 2710ms
+ ✓ Compiled /api/sites/[id] in 229ms (1425 modules)
+ GET /api/sites/9791446b-8d38-4967-8d05-a5f33cf5067e 200 in 829ms
+ ✓ Compiled in 89ms (976 modules)
+ ⨯ ./src/app/sites/[siteId]/report/[scanId]/IssueTable.tsx:5:1
+Module not found: Can't resolve '../../../components/ui/sheet'
+  3 | import { useState } from 'react'
+  4 | import { AlertCircle, CheckCircle, Info, XCircle, ExternalLink } from 'lucide-react'
+> 5 | import {
+    | ^
+  6 |   Sheet,
+  7 |   SheetContent,
+  8 |   SheetDescription,
+
+https://nextjs.org/docs/messages/module-not-found
+ ✓ Compiled in 46ms (447 modules)
+ ✓ Compiled /sites/[siteId]/report/[scanId] in 127ms (976 modules)
+ GET /sites/9791446b-8d38-4967-8d05-a5f33cf5067e/report/af8d907f-26fe-40eb-940d-64ca642ccc95 200 in 722ms
+ ✓ Compiled in 18ms
+ ✓ Compiled /api/audit in 177ms (199 modules)
+ POST /api/audit 200 in 973ms
+   Reload env: .env.local
+ ✓ Compiled in 95ms (646 modules)
+   Reload env: .env.local
+ ✓ Compiled in 52ms (646 modules)
+[?25h
