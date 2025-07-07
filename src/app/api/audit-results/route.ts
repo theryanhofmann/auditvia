@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '../auth/[...nextauth]/route'
 import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -29,6 +31,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ scans: mockScans })
     }
 
+    // Check authentication for regular API calls
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     // Get Supabase client (admin or regular based on DEV_NO_ADMIN flag)
     const supabase = await getSupabaseClient()
     if (!supabase) {
@@ -47,9 +56,11 @@ export async function GET(request: NextRequest) {
         sites!inner (
           id,
           url,
-          name
+          name,
+          user_id
         )
       `)
+      .eq('sites.user_id', session.user.id)
       .order('created_at', { ascending: false })
       .limit(limit)
 
@@ -135,6 +146,13 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Check authentication for regular API calls
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     // Get Supabase client (admin or regular based on DEV_NO_ADMIN flag)
     const supabase = await getSupabaseClient()
     if (!supabase) {
@@ -154,7 +172,8 @@ export async function POST(request: NextRequest) {
         sites!inner (
           id,
           url,
-          name
+          name,
+          user_id
         ),
         issues (
           id,
@@ -168,6 +187,7 @@ export async function POST(request: NextRequest) {
         )
       `)
       .eq('id', scanId)
+      .eq('sites.user_id', session.user.id)
       .single()
 
     if (scanError) {
