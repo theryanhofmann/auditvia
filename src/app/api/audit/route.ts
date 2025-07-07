@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '../auth/[...nextauth]/route'
 import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supabase/server'
 import { Site } from '@/app/types/database'
 
@@ -15,6 +17,11 @@ export async function POST(request: NextRequest) {
       new URL(url)
     } catch {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
+    }
+
+    // Ensure HTTPS
+    if (!url.startsWith('https://')) {
+      return NextResponse.json({ error: 'URL must use HTTPS' }, { status: 400 })
     }
 
     // DEV_NO_ADMIN bypass for testing
@@ -71,6 +78,8 @@ export async function POST(request: NextRequest) {
     const expectedServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     
     let supabase
+    let authenticatedUserId = null
+    
     if (serviceKey && expectedServiceKey && serviceKey === expectedServiceKey) {
       // Authenticated service call - use admin client directly
       const { createClient: createSupabaseClient } = await import('@supabase/supabase-js')
@@ -84,8 +93,18 @@ export async function POST(request: NextRequest) {
           }
         }
       )
+      // For service calls, use the provided userId
+      authenticatedUserId = userId
     } else {
-      // Regular client call
+      // Regular client call - require authentication
+      const session = await getServerSession(authOptions)
+      
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      
+      authenticatedUserId = session.user.id
+      
       supabase = await getSupabaseClient()
       if (!supabase) {
         return createAdminDisabledResponse()
@@ -109,6 +128,23 @@ export async function POST(request: NextRequest) {
     // Create or update site if siteId provided
     let site: Site | null = null
     if (siteId) {
+      // Verify site belongs to authenticated user (for non-service calls)
+      let siteQuery = supabase
+        .from('sites')
+        .select()
+        .eq('id', siteId)
+      
+      // Add user restriction for regular authenticated calls
+      if (!serviceKey) {
+        siteQuery = siteQuery.eq('user_id', authenticatedUserId)
+      }
+      
+      const { data: existingSite, error: fetchError } = await siteQuery.single()
+      
+      if (fetchError || !existingSite) {
+        return NextResponse.json({ error: 'Site not found or access denied' }, { status: 404 })
+      }
+      
       // Update existing site
       const { data: updatedSite, error: updateError } = await supabase
         .from('sites')
@@ -121,9 +157,10 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating site:', updateError)
-      } else {
-        site = updatedSite
+        return NextResponse.json({ error: 'Failed to update site' }, { status: 500 })
       }
+      
+      site = updatedSite
     } else {
       // Create new site
       const { data: newSite, error: createError } = await supabase
@@ -131,7 +168,7 @@ export async function POST(request: NextRequest) {
         .insert({
           url,
           name: getHostname(url),
-          user_id: userId || null,
+          user_id: authenticatedUserId,
         })
         .select()
         .single()
