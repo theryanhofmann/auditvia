@@ -1,34 +1,64 @@
 'use client'
 
-import { useState } from 'react'
-import { StatsPanel } from './dashboard/StatsPanel'
+import { useState, useRef, useCallback } from 'react'
+import { StatsPanel, type StatsPanelRef } from './dashboard/StatsPanel'
 import { SitesTable } from './dashboard/SitesTable'
 import { AddSiteModal } from './ui/AddSiteModal'
 import { useSites } from '@/app/lib/hooks/useSites'
 import { Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { ScanTrendsPanel, type ScanTrendsPanelRef } from './dashboard/ScanTrendsPanel'
 
-export function DashboardClient() {
+export default function DashboardClient() {
   const [showAddSiteModal, setShowAddSiteModal] = useState(false)
   const [scanningSiteId, setScanningSiteId] = useState<string | null>(null)
   const { sites, isLoading, refresh } = useSites()
+  const statsPanelRef = useRef<StatsPanelRef>(null)
+  const scanTrendsPanelRef = useRef<ScanTrendsPanelRef>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleSiteAdded = () => {
-    // Refresh the sites list when a new site is added
     refresh()
+    statsPanelRef.current?.refresh()
+    scanTrendsPanelRef.current?.refresh()
   }
+
+  const refreshDashboard = useCallback(async () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Refreshing dashboard...')
+    }
+
+    setIsRefreshing(true)
+    try {
+      await Promise.all([
+        refresh(),
+        new Promise(resolve => {
+          statsPanelRef.current?.refresh()
+          scanTrendsPanelRef.current?.refresh()
+          resolve(true)
+        })
+      ])
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error)
+      toast.error('Failed to refresh dashboard')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [refresh])
 
   const handleRunScan = async (siteId: string) => {
     try {
       setScanningSiteId(siteId)
 
-      // Get the site URL for the scan
       const site = sites.find(s => s.id === siteId)
       if (!site) {
         throw new Error('Site not found')
       }
 
-      // Step 1: Start the scan
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Starting scan for site:', { id: siteId, url: site.url })
+      }
+
       const auditResponse = await fetch('/api/audit', {
         method: 'POST',
         headers: {
@@ -50,16 +80,14 @@ export function DashboardClient() {
       if (auditData.success && auditData.data?.scan?.id) {
         const scanId = auditData.data.scan.id
         
-        // If scan completed immediately (mock mode), show results
         if (auditData.data.scan.status === 'completed') {
           const score = auditData.summary?.score || auditData.data.scan.score
           const violationsCount = auditData.summary?.violations || 0
           toast.success(`Scan completed! Score: ${score}/100 (${violationsCount} issues found)`)
-          refresh()
+          await refreshDashboard()
           return
         }
         
-        // Step 2: Poll for completion if scan is pending
         await pollScanCompletion(scanId)
       } else {
         throw new Error('Invalid scan response')
@@ -73,8 +101,14 @@ export function DashboardClient() {
   }
 
   const pollScanCompletion = async (scanId: string, maxAttempts: number = 30) => {
+    let lastStatus = ''
+    
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔄 Polling scan status (attempt ${attempt}/${maxAttempts})...`)
+        }
+
         const response = await fetch('/api/audit-results', {
           method: 'POST',
           headers: {
@@ -87,11 +121,19 @@ export function DashboardClient() {
           const result = await response.json()
           const scan = result.scan
           
+          // Only log status changes
+          if (scan?.status !== lastStatus) {
+            lastStatus = scan?.status
+            if (process.env.NODE_ENV === 'development') {
+              console.log('📊 Scan status update:', { scanId, status: scan?.status })
+            }
+          }
+          
           if (scan?.status === 'completed') {
             const score = scan.score || 0
             const issuesCount = scan.issues?.length || scan.total_violations || 0
             toast.success(`Scan completed! Score: ${score}/100 (${issuesCount} issues found)`)
-            refresh()
+            await refreshDashboard()
             return
           }
           
@@ -99,9 +141,8 @@ export function DashboardClient() {
             throw new Error(`Scan failed with status: ${scan.status}`)
           }
           
-          // Still pending, continue polling
           if (attempt < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
+            await new Promise(resolve => setTimeout(resolve, 2000))
           }
         } else {
           throw new Error('Failed to fetch scan status')
@@ -111,7 +152,6 @@ export function DashboardClient() {
         if (attempt === maxAttempts) {
           throw new Error('Scan timed out - please check results manually')
         }
-        // Continue polling on error unless it's the last attempt
         await new Promise(resolve => setTimeout(resolve, 2000))
       }
     }
@@ -136,7 +176,7 @@ export function DashboardClient() {
 
       await response.json()
       toast.success(enabled ? 'Monitoring enabled' : 'Monitoring disabled')
-      refresh() // Refresh sites data
+      await refreshDashboard()
     } catch (error) {
       console.error('Error toggling monitoring:', error)
       toast.error('Failed to toggle monitoring')
@@ -154,7 +194,7 @@ export function DashboardClient() {
       }
 
       toast.success('Site deleted successfully')
-      refresh() // Refresh sites data
+      await refreshDashboard()
     } catch (error) {
       console.error('Error deleting site:', error)
       toast.error('Failed to delete site')
@@ -184,11 +224,11 @@ export function DashboardClient() {
         
         <div className="flex items-center space-x-4">
           <button
-            onClick={refresh}
-            disabled={isLoading}
+            onClick={refreshDashboard}
+            disabled={isRefreshing}
             className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
           
@@ -203,27 +243,20 @@ export function DashboardClient() {
       </div>
 
       {/* Stats Panel */}
-      <StatsPanel sites={sites} />
+      <StatsPanel ref={statsPanelRef} sites={sites} />
+
+      {/* Scan Trends */}
+      <ScanTrendsPanel ref={scanTrendsPanelRef} />
 
       {/* Sites Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Your Websites
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {sites.length} {sites.length === 1 ? 'website' : 'websites'} being monitored
-          </p>
-        </div>
-        
-        <SitesTable
-          sites={sites}
-          onRunScan={handleRunScan}
-          onToggleMonitoring={handleToggleMonitoring}
-          onDeleteSite={handleDeleteSite}
-          isScanning={scanningSiteId}
-        />
-      </div>
+      <SitesTable
+        sites={sites}
+        onRunScan={handleRunScan}
+        onToggleMonitoring={handleToggleMonitoring}
+        onDeleteSite={handleDeleteSite}
+        isScanning={scanningSiteId}
+        onSiteUpdated={refreshDashboard}
+      />
 
       {/* Add Site Modal */}
       <AddSiteModal

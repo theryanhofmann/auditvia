@@ -1,4 +1,4 @@
-import { DashboardClient } from '@/app/components/DashboardClient'
+import DashboardClient from '@/app/components/DashboardClient'
 import { Navigation } from '@/app/components/Navigation'
 
 export default function DashboardPage() {

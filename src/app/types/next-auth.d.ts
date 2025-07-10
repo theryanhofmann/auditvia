@@ -4,6 +4,7 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id: string
+      github_id?: string
       name?: string | null
       email?: string | null
       image?: string | null
@@ -12,11 +13,13 @@ declare module 'next-auth' {
 
   interface User {
     id: string
+    github_id?: string
   }
 }
 
 declare module 'next-auth/jwt' {
   interface JWT {
     accessToken?: string
+    github_id?: string
   }
 } 

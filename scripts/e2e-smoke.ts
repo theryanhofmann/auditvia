@@ -3,9 +3,40 @@
 import { config } from 'dotenv'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 // Load environment variables from .env.local
 config({ path: join(process.cwd(), '.env.local') })
+
+async function checkLocalhost(): Promise<boolean> {
+  try {
+    const { stdout, stderr } = await execAsync('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000')
+    return parseInt(stdout) > 0
+  } catch (error) {
+    return false
+  }
+}
+
+async function suggestBaseUrl() {
+  console.log('\n⚠️  Unable to connect to localhost. This is common on macOS with Docker.')
+  console.log('Try one of the following solutions:')
+  console.log('1. Add to .env.local:')
+  console.log('   BASE_URL=http://host.docker.internal:3000')
+  console.log('2. Or use your machine\'s IP:')
+  try {
+    const { stdout } = await execAsync("ifconfig | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | head -n 1")
+    const ip = stdout.trim()
+    if (ip) {
+      console.log(`   BASE_URL=http://${ip}:3000`)
+    }
+  } catch (error) {
+    console.log('   BASE_URL=http://<your-ip-address>:3000')
+  }
+  console.log('\nThen run the smoke test again.\n')
+}
 
 interface Site {
   id: string
@@ -34,13 +65,45 @@ class SmokeTest {
   private devMode: boolean
 
   constructor() {
-    this.baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    this.baseUrl = process.env.BASE_URL || 'http://localhost:3000'
     this.devMode = process.env.DEV_NO_ADMIN === 'true'
     
     console.log('🚀 Starting Auditvia E2E Smoke Test')
-    console.log(`   Base URL: ${this.baseUrl}`)
-    console.log(`   Dev Mode: ${this.devMode ? 'YES (skipping auth)' : 'NO (requires auth)'}`)
+    console.log(`Base URL: ${this.baseUrl}`)
+    console.log(`Dev Mode: ${this.devMode ? 'YES (skipping auth)' : 'NO (requires auth)'}`)
     console.log('')
+  }
+
+  async waitForServer(maxAttempts = 60, interval = 2000): Promise<void> {
+    console.log(`[SMOKE] Pinging ${this.baseUrl} until server responds...`)
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(this.baseUrl, {
+          method: 'GET',
+          headers: { 'Accept': 'text/html' },
+          signal: AbortSignal.timeout(5000)
+        })
+        
+        if (response.ok) {
+          console.log('✅ Server is ready!')
+          return
+        }
+        
+        console.log(`Attempt ${attempt}/${maxAttempts} - Server responded with status ${response.status}`)
+      } catch (error) {
+        if (error instanceof Error) {
+          const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError'
+          console.log(`Attempt ${attempt}/${maxAttempts} - ${isTimeout ? 'Request timed out' : error.message}`)
+        }
+      }
+      
+      if (attempt === maxAttempts) {
+        throw new Error('Server failed to respond within timeout')
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, interval))
+    }
   }
 
   async run(): Promise<void> {
@@ -274,31 +337,33 @@ class SmokeTest {
 
 // Validate required environment variables
 function validateEnvironment(): void {
-  const requiredVars = [
+  const requiredEnvVars = [
     'NEXT_PUBLIC_SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY'
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'NEXTAUTH_SECRET',
+    'NEXTAUTH_URL'
   ]
 
-  const missingVars = requiredVars.filter(varName => !process.env[varName])
-  
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName])
+
   if (missingVars.length > 0) {
-    console.error('❌ Missing required environment variables:')
-    missingVars.forEach(varName => console.error(`   - ${varName}`))
-    console.error('')
-    console.error('Please ensure .env.local contains all required variables.')
-    process.exit(1)
+    throw new Error('Missing required environment variables. Make sure .env.local exists and is configured properly (see .env.example).')
   }
 
-  // Warn about dev mode usage
-  const devMode = process.env.DEV_NO_ADMIN === 'true'
-  if (!devMode) {
-    console.log('⚠️  Warning: Running in production mode. Set DEV_NO_ADMIN=true for testing.')
-    console.log('')
+  // Additional environment validation if needed
+  if (!process.env.NEXTAUTH_URL?.startsWith('http')) {
+    throw new Error('NEXTAUTH_URL must be a valid URL starting with http:// or https://')
   }
 }
 
-// Main execution
 async function main(): Promise<void> {
+  // Check if localhost is accessible
+  if (!process.env.BASE_URL && !(await checkLocalhost())) {
+    await suggestBaseUrl()
+    process.exit(1)
+  }
+
   console.log('Auditvia E2E Smoke Test')
   console.log('========================')
   console.log('')
@@ -306,7 +371,17 @@ async function main(): Promise<void> {
   validateEnvironment()
   
   const smokeTest = new SmokeTest()
-  await smokeTest.run()
+  
+  try {
+    await smokeTest.waitForServer()
+    await smokeTest.run()
+  } catch (error) {
+    console.error('\n❌ Smoke test failed!')
+    if (error instanceof Error) {
+      console.error(`Error: ${error.message}`)
+    }
+    process.exit(1)
+  }
 }
 
 // Handle uncaught errors
@@ -325,9 +400,7 @@ process.on('unhandledRejection', (reason) => {
 })
 
 // Run the test
-main().catch((error) => {
-  console.error('')
-  console.error('❌ \x1b[31mSMOKE TEST FAILED\x1b[0m')
-  console.error(`   Error: ${error.message}`)
+main().catch(error => {
+  console.error('Unhandled error:', error)
   process.exit(1)
 }) 

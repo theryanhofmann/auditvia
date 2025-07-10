@@ -1,148 +1,212 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../auth/[...nextauth]/route'
-import { createClient } from '@/app/lib/supabase/server'
+"use server";
 
-export async function GET() {
-  // Bypass for CI testing in dev mode
-  if (process.env.DEV_NO_ADMIN === 'true') {
-    return NextResponse.json({ 
-      sites: [
-        {
-          id: 'test-site-1',
-          url: 'https://example.com',
-          name: 'Test Site',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          user_id: 'test-user',
-          monitoring: false,
-          latest_score: 85,
-          latest_scan_at: new Date().toISOString()
-        }
-      ]
-    })
+import { getServerSession } from "next-auth";
+import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/app/types/database";
+import { cookies } from "next/headers";
+import { authOptions } from "../auth/[...nextauth]/route";
+
+type TypedSupabaseClient = ReturnType<typeof createServerClient<Database>>;
+
+async function getOrCreateUser(supabase: TypedSupabaseClient, githubId: string): Promise<{ id: string }> {
+  // Try to find existing user
+  const { data: existingUser, error: fetchError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('github_id', githubId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error('Failed to fetch user:', fetchError);
+    throw new Error('Failed to fetch user');
   }
 
+  if (existingUser) {
+    return existingUser;
+  }
+
+  // Create new user if not found
+  const { data: newUser, error: createError } = await supabase
+    .from('users')
+    .insert({ github_id: githubId })
+    .select('id')
+    .single();
+
+  if (createError || !newUser) {
+    console.error('Failed to create user:', createError);
+    throw new Error('Failed to create user');
+  }
+
+  return newUser;
+}
+
+export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    
+    const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
     }
 
-    const supabase = await createClient()
-    
-    const { data: sites, error } = await supabase
-      .from('sites')
-      .select(`
-        id,
-        url,
-        name,
-        created_at,
-        updated_at,
-        user_id,
-        monitoring,
-        scans (
-          score,
-          created_at
-        )
-      `)
-      .eq('user_id', session.user.id)
-      .order('created_at', { referencedTable: 'scans', ascending: false })
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set(name, value, options)
+            } catch {
+              // The `set` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set(name, '', options)
+            } catch {
+              // The `remove` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          }
+        }
+      }
+    )
 
-    if (error) {
-      console.error('Error fetching sites:', error)
-      return NextResponse.json({ error: 'Failed to fetch sites' }, { status: 500 })
+    // Get or create user
+    let supabaseUser;
+    try {
+      supabaseUser = await getOrCreateUser(supabase, session.user.id);
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), { status: 500 });
     }
 
-    // Map sites to include latest_score and latest_scan_at
-    const mappedSites = sites?.map(site => ({
-      ...site,
-      latest_score: site.scans?.[0]?.score ?? null,
-      latest_scan_at: site.scans?.[0]?.created_at ?? null
-    })) || []
+    const { url, name, custom_domain } = await req.json();
 
-    return NextResponse.json({ sites: mappedSites })
+    const trimmedUrl = url?.trim();
+    if (!trimmedUrl || !name) {
+      return new Response(JSON.stringify({ error: "Missing site URL or name" }), { status: 400 });
+    }
+
+    // Check if site already exists
+    const { data: existingSite, error: checkError } = await supabase
+      .from("sites")
+      .select("id")
+      .eq("url", trimmedUrl)
+      .eq("user_id", supabaseUser.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Failed to check existing site:", checkError);
+      return new Response(JSON.stringify({ error: "Failed to check existing site" }), { status: 500 });
+    }
+
+    if (existingSite) {
+      return new Response(JSON.stringify({ error: "Site already exists" }), { status: 409 });
+    }
+
+    // Insert new site
+    const { data: newSite, error: insertError } = await supabase
+      .from("sites")
+      .insert([{ 
+        url: trimmedUrl, 
+        name, 
+        custom_domain,
+        user_id: supabaseUser.id
+      }])
+      .select()
+      .single();
+
+    if (insertError || !newSite) {
+      console.error("Failed to create site:", insertError);
+      return new Response(JSON.stringify({ error: "Failed to create site" }), { status: 500 });
+    }
+
+    return new Response(JSON.stringify({ 
+      id: newSite.id,
+      url: newSite.url,
+      name: newSite.name
+    }), { 
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error) {
-    console.error('Error in GET /api/sites:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Unexpected error in POST /api/sites:", error);
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }), { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
-  // Bypass for CI testing in dev mode
-  if (process.env.DEV_NO_ADMIN === 'true') {
-    return NextResponse.json({ 
-      success: true, 
-      site: {
-        id: 'test-site-' + Date.now(),
-        url: 'https://example.com',
-        name: 'Test Site',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        user_id: 'test-user',
-        monitoring: false
-      }
-    }, { status: 201 })
-  }
-
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-    
+    const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
     }
 
-    const { url, name } = await request.json()
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set(name, value, options)
+            } catch {
+              // The `set` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set(name, '', options)
+            } catch {
+              // The `remove` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          }
+        }
+      }
+    )
 
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 })
-    }
-
-    // Validate URL format
-    if (!url.startsWith('https://')) {
-      return NextResponse.json({ error: 'URL must start with https://' }, { status: 400 })
-    }
-
+    // Get or create user
+    let supabaseUser;
     try {
-      new URL(url)
-    } catch {
-      return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
+      supabaseUser = await getOrCreateUser(supabase, session.user.id);
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), { status: 500 });
     }
 
-    const supabase = await createClient()
+    const { data: sites, error: fetchError } = await supabase
+      .from("sites")
+      .select("*")
+      .eq("user_id", supabaseUser.id);
 
-    // Check if site already exists for this user
-    const { data: existingSite } = await supabase
-      .from('sites')
-      .select('id')
-      .eq('url', url.trim())
-      .eq('user_id', session.user.id)
-      .single()
-
-    if (existingSite) {
-      return NextResponse.json({ error: 'Site already exists' }, { status: 409 })
+    if (fetchError) {
+      console.error("Failed to fetch sites:", fetchError);
+      return new Response(JSON.stringify({ error: "Failed to fetch sites" }), { status: 500 });
     }
 
-    // Insert the new site
-    const { data: newSite, error } = await supabase
-      .from('sites')
-      .insert({
-        url: url.trim(),
-        name: name?.trim() || null,
-        user_id: session.user.id
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error creating site:', error)
-      return NextResponse.json({ error: 'Failed to create site' }, { status: 500 })
-    }
-
-    return NextResponse.json({ site: newSite }, { status: 201 })
+    return new Response(JSON.stringify({ sites }), { 
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error) {
-    console.error('Error in POST /api/sites:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Unexpected error in GET /api/sites:", error);
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }), { status: 500 });
   }
 } 

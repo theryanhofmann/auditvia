@@ -13,76 +13,103 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y lsof curl net-tools
 
       - name: Install dependencies
         run: npm ci
 
       - name: Create environment file
         run: |
-          if [ -f .env.example ]; then
-            cp .env.example .env.local
-          else
-            touch .env.local
-          fi
-
-                      echo "DEV_NO_ADMIN=true" >> .env.local
-            echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env.local
-            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env.local
-            echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.local
-            echo "NEXTAUTH_URL=http://localhost:3000" >> .env.local
-            echo "NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}" >> .env.local
-            echo "GITHUB_ID=${{ secrets.GH_OAUTH_ID }}" >> .env.local
-            echo "GITHUB_SECRET=${{ secrets.GH_OAUTH_SECRET }}" >> .env.local
+          cat > .env.local << EOL
+          NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-key
+          SUPABASE_SERVICE_ROLE_KEY=dummy-service-key
+          NEXTAUTH_URL=http://localhost:3000
+          NEXTAUTH_SECRET=dummy-secret-key-for-testing
+          BASE_URL=http://localhost:3000
+          DEV_NO_ADMIN=true
+          EOL
 
       - name: Build application
         run: npm run build
 
       - name: Clear port 3000
         run: |
-          lsof -ti:3000 | xargs kill -9 || true
+          if lsof -i :3000; then
+            kill -9 $(lsof -ti :3000)
+          fi
 
-      - name: Start development server
-        run: npm run dev &
+      - name: Start production server
+        run: |
+          npm start &
+          echo $! > .nextserver.pid
 
       - name: Wait for server to be ready
         run: |
-          echo "Waiting for development server to start..."
-          timeout 120 bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done'
+          echo "Waiting for server to be ready..."
+          attempts=0
+          max_attempts=60
+          
+          until $(curl --output /dev/null --silent --head --fail http://localhost:3000); do
+            if [ $attempts -eq $max_attempts ]; then
+              echo "Server failed to start within timeout"
+              echo "Debug information:"
+              echo "1. Checking server process:"
+              if [ -f .nextserver.pid ]; then
+                pid=$(cat .nextserver.pid)
+                if ps -p $pid > /dev/null; then
+                  echo "Server process ($pid) is running"
+                else
+                  echo "Server process ($pid) is not running"
+                fi
+              fi
+              echo "2. Network status:"
+              netstat -tlpn | grep :3000 || echo "No process listening on port 3000"
+              echo "3. Attempting direct curl with full output:"
+              curl -v http://localhost:3000
+              exit 1
+            fi
+            attempts=$((attempts+1))
+            echo "Attempt $attempts/$max_attempts - Server not ready, waiting..."
+            sleep 2
+          done
           echo "Server is ready!"
 
-      - name: Run smoke test
-        run: NODE_ENV=development npm exec tsx scripts/e2e-smoke.ts
+      - name: Run smoke tests
+        run: npm run test:smoke
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXTAUTH_URL: http://localhost:3000
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          GITHUB_ID: ${{ secrets.GH_OAUTH_ID }}
-          GITHUB_SECRET: ${{ secrets.GH_OAUTH_SECRET }}
-          DEV_NO_ADMIN: true
+          BASE_URL: http://localhost:3000
 
-      - name: Kill development server
+      - name: Kill server
         if: always()
         run: |
-          pkill -f "next dev" || true
+          if [ -f .nextserver.pid ]; then
+            kill -9 $(cat .nextserver.pid) || true
+            rm .nextserver.pid
+          fi
+          if lsof -i :3000; then
+            kill -9 $(lsof -ti :3000)
+          fi
 
       - name: Upload test artifacts (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: test-artifacts
           path: |
+            .next/
             .env.local
-            package.json
-            package-lock.json
-          retention-days: 7
+            npm-debug.log*
+            yarn-debug.log*
+            yarn-error.log*

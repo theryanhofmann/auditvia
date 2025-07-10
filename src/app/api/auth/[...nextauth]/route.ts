@@ -12,13 +12,18 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, token }) {
       if (session.user) {
+        // Use GitHub ID as the user ID
         session.user.id = token.sub!
+        // Add GitHub ID separately if needed
+        session.user.github_id = token.sub
       }
       return session
     },
-    async jwt({ token, account }) {
+    async jwt({ token, account, profile }) {
       if (account) {
         token.accessToken = account.access_token
+        // Store GitHub profile data if needed
+        token.github_id = profile?.sub
       }
       return token
     },

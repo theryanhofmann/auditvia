@@ -9,22 +9,44 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      users: {
+        Row: {
+          id: string
+          github_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          github_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          github_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       sites: {
         Row: {
           id: string
           user_id: string | null
           url: string
           name: string | null
-          monitoring: boolean | null
+          custom_domain: string | null
+          monitoring_enabled: boolean
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          user_id?: string | null
+          user_id: string | null
           url: string
           name?: string | null
-          monitoring?: boolean | null
+          custom_domain?: string | null
+          monitoring_enabled?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -33,11 +55,11 @@ export interface Database {
           user_id?: string | null
           url?: string
           name?: string | null
-          monitoring?: boolean | null
+          custom_domain?: string | null
+          monitoring_enabled?: boolean
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
       }
       scans: {
         Row: {
@@ -67,14 +89,6 @@ export interface Database {
           status?: 'pending' | 'running' | 'completed' | 'failed'
           created_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "scans_site_id_fkey"
-            columns: ["site_id"]
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          }
-        ]
       }
       issues: {
         Row: {
@@ -113,48 +127,50 @@ export interface Database {
           html?: string | null
           created_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "issues_scan_id_fkey"
-            columns: ["scan_id"]
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          }
-        ]
       }
-      scan_logs: {
+      scan_trends: {
         Row: {
-          id: number
+          id: string
+          scan_id: string
           site_id: string
-          run_at: string
-          success: boolean
-          message: string | null
+          previous_scan_id: string | null
+          score_change: number | null
+          new_issues_count: number
+          resolved_issues_count: number
+          critical_issues_delta: number
+          serious_issues_delta: number
+          moderate_issues_delta: number
+          minor_issues_delta: number
           created_at: string
         }
         Insert: {
-          id?: number
+          id?: string
+          scan_id: string
           site_id: string
-          run_at?: string
-          success: boolean
-          message?: string | null
+          previous_scan_id?: string | null
+          score_change?: number | null
+          new_issues_count?: number
+          resolved_issues_count?: number
+          critical_issues_delta?: number
+          serious_issues_delta?: number
+          moderate_issues_delta?: number
+          minor_issues_delta?: number
           created_at?: string
         }
         Update: {
-          id?: number
+          id?: string
+          scan_id?: string
           site_id?: string
-          run_at?: string
-          success?: boolean
-          message?: string | null
+          previous_scan_id?: string | null
+          score_change?: number | null
+          new_issues_count?: number
+          resolved_issues_count?: number
+          critical_issues_delta?: number
+          serious_issues_delta?: number
+          moderate_issues_delta?: number
+          minor_issues_delta?: number
           created_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "scan_logs_site_id_fkey"
-            columns: ["site_id"]
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          }
-        ]
       }
     }
     Views: {
@@ -164,7 +180,7 @@ export interface Database {
           score: number | null
           started_at: string
           finished_at: string | null
-          status: 'pending' | 'running' | 'completed' | 'failed'
+          status: string
           site_id: string
           url: string
           site_name: string | null
@@ -175,39 +191,23 @@ export interface Database {
           moderate_issues: number
           minor_issues: number
         }
-        Insert: {
-          scan_id?: string
-          score?: number | null
-          started_at?: string
-          finished_at?: string | null
-          status?: 'pending' | 'running' | 'completed' | 'failed'
-          site_id?: string
-          url?: string
-          site_name?: string | null
-          user_id?: string
-          total_issues?: number
-          critical_issues?: number
-          serious_issues?: number
-          moderate_issues?: number
-          minor_issues?: number
+      }
+      site_trend_stats: {
+        Row: {
+          site_id: string
+          url: string
+          site_name: string | null
+          user_id: string
+          total_scans: number
+          avg_score_change: number | null
+          total_new_issues: number
+          total_resolved_issues: number
+          critical_issues_trend: number
+          serious_issues_trend: number
+          moderate_issues_trend: number
+          minor_issues_trend: number
+          last_scan_at: string
         }
-        Update: {
-          scan_id?: string
-          score?: number | null
-          started_at?: string
-          finished_at?: string | null
-          status?: 'pending' | 'running' | 'completed' | 'failed'
-          site_id?: string
-          url?: string
-          site_name?: string | null
-          user_id?: string
-          total_issues?: number
-          critical_issues?: number
-          serious_issues?: number
-          moderate_issues?: number
-          minor_issues?: number
-        }
-        Relationships: []
       }
     }
     Functions: {
@@ -216,13 +216,14 @@ export interface Database {
     Enums: {
       [_ in never]: never
     }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
 }
 
 // Helper types for easier usage
+export type User = Database['public']['Tables']['users']['Row']
+export type UserInsert = Database['public']['Tables']['users']['Insert']
+export type UserUpdate = Database['public']['Tables']['users']['Update']
+
 export type Site = Database['public']['Tables']['sites']['Row']
 export type SiteInsert = Database['public']['Tables']['sites']['Insert']
 export type SiteUpdate = Database['public']['Tables']['sites']['Update']
@@ -237,9 +238,10 @@ export type IssueUpdate = Database['public']['Tables']['issues']['Update']
 
 export type ScanSummary = Database['public']['Views']['scan_summaries']['Row']
 
-export type ScanLog = Database['public']['Tables']['scan_logs']['Row']
-export type ScanLogInsert = Database['public']['Tables']['scan_logs']['Insert']
-export type ScanLogUpdate = Database['public']['Tables']['scan_logs']['Update']
-
 export type SeverityLevel = 'critical' | 'serious' | 'moderate' | 'minor'
-export type ScanStatus = 'pending' | 'running' | 'completed' | 'failed' 
+export type ScanStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+export type ScanTrend = Database['public']['Tables']['scan_trends']['Row']
+export type ScanTrendInsert = Database['public']['Tables']['scan_trends']['Insert']
+export type ScanTrendUpdate = Database['public']['Tables']['scan_trends']['Update']
+export type SiteTrendStats = Database['public']['Views']['site_trend_stats']['Row'] 

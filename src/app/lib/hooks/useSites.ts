@@ -27,9 +27,10 @@ const fetcher = async (url: string): Promise<Site[]> => {
       last_scan: site.latest_scan_at,
       created_at: site.created_at,
       updated_at: site.updated_at,
-      monitoring: site.monitoring || false,
+      monitoring_enabled: site.monitoring_enabled || false,
       user_id: site.user_id,
-      latest_audit_result_id: null // We'll implement this later if needed
+      latest_audit_result_id: null, // We'll implement this later if needed
+      custom_domain: site.custom_domain
     }
   }) || []
 }
@@ -37,21 +38,19 @@ const fetcher = async (url: string): Promise<Site[]> => {
 export function useSites() {
   const { data: session } = useSession()
   
-  const { data, error, isLoading, mutate } = useSWR<Site[]>(
+  const { data: sites, error, mutate } = useSWR<Site[]>(
     session?.user ? '/api/sites' : null,
     fetcher,
     {
-      refreshInterval: 0, // Don't auto-refresh
-      revalidateOnFocus: false, // Don't revalidate on window focus
-      revalidateOnReconnect: true, // Revalidate on network reconnect
+      refreshInterval: 30000, // Refresh every 30 seconds
+      revalidateOnFocus: true,
     }
   )
 
   return {
-    sites: data || [],
-    isLoading,
+    sites: sites || [],
+    isLoading: !error && !sites,
     isError: error,
-    mutate, // For manual revalidation
-    refresh: () => mutate(), // Alias for easier use
+    refresh: mutate
   }
 } 

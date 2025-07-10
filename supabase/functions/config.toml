@@ -1,0 +1,14 @@
+# Supabase Edge Functions Configuration
+
+[runScheduledScans]
+# Run scheduled accessibility scans every 12 hours
+# Schedule: 6 AM and 6 PM UTC daily
+schedule = "0 6,18 * * *"
+
+# Environment variables specific to this function
+# These will be available as Deno.env.get() in the function
+[runScheduledScans.env]
+# Function-specific settings (optional)
+FUNCTION_NAME = "runScheduledScans"
+MAX_CONCURRENT_SCANS = "5"
+TIMEOUT_MS = "300000"  # 5 minutes timeout per scan 

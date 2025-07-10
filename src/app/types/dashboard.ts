@@ -1,16 +1,17 @@
 export interface Site {
   id: string
   url: string
-  name?: string | null
+  name: string | null
   description?: string | null
   score?: number | null
   status?: 'idle' | 'scanning' | 'completed' | 'error' | 'queued' | null
   last_scan?: string | null
   created_at: string
   updated_at: string
-  monitoring: boolean
-  user_id?: string | null
+  monitoring_enabled: boolean
+  user_id: string | null
   latest_audit_result_id?: string | null
+  custom_domain: string | null
 }
 
 export interface AuditResult {

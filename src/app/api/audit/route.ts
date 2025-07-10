@@ -1,337 +1,220 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../auth/[...nextauth]/route'
-import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supabase/server'
-import { Site } from '@/app/types/database'
+import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import type { Database } from '@/app/types/database'
+import { cookies } from 'next/headers'
+import { AccessibilityScanner } from '../../../../scripts/runA11yScan'
+import type { Result } from 'axe-core'
 
-export async function POST(request: NextRequest) {
+interface AuditRequest {
+  url: string
+  siteId: string
+  userId?: string
+  waitForSelector?: string
+}
+
+export async function POST(request: Request) {
   try {
-    const { url, siteId, userId } = await request.json()
-
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 })
-    }
-
-    // Validate URL format
-    try {
-      new URL(url)
-    } catch {
-      return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
-    }
-
-    // Ensure HTTPS
-    if (!url.startsWith('https://')) {
-      return NextResponse.json({ error: 'URL must use HTTPS' }, { status: 400 })
-    }
-
-    // DEV_NO_ADMIN bypass for testing
-    if (process.env.DEV_NO_ADMIN === 'true') {
-      // Run mock accessibility audit
-      const auditResults = await runAccessibilityAudit(url)
-      const score = calculateScore(auditResults.violations)
-      
-      const bySeverity = {
-        critical: auditResults.violations.filter(v => v.impact === 'critical').length,
-        serious: auditResults.violations.filter(v => v.impact === 'serious').length,
-        moderate: auditResults.violations.filter(v => v.impact === 'moderate').length,
-        minor: auditResults.violations.filter(v => v.impact === 'minor').length,
-      }
-
-      // Return mock scan data
-      const mockScan = {
-        id: `scan-${Date.now()}`,
-        site_id: siteId || `site-${Date.now()}`,
-        score,
-        status: 'completed',
-        started_at: new Date().toISOString(),
-        finished_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const mockSite = {
-        id: siteId || `site-${Date.now()}`,
-        url,
-        name: getHostname(url),
-        user_id: userId || 'test-user',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        monitoring_enabled: false,
-      }
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          site: mockSite,
-          scan: mockScan,
-        },
-        summary: {
-          score,
-          violations: auditResults.violations.length,
-          by_severity: bySeverity,
-        },
-      })
-    }
-
-    // Check for service key header (from Edge Function)
-    const serviceKey = request.headers.get('x-service-key')
-    const expectedServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    
-    let supabase
-    let authenticatedUserId = null
-    
-    if (serviceKey && expectedServiceKey && serviceKey === expectedServiceKey) {
-      // Authenticated service call - use admin client directly
-      const { createClient: createSupabaseClient } = await import('@supabase/supabase-js')
-      supabase = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set(name, value, options)
+            } catch {
+              // The `set` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set(name, '', options)
+            } catch {
+              // The `remove` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
           }
         }
+      }
+    )
+    console.log('🚀 Starting audit request...')
+    const { url, siteId, userId, waitForSelector } = await request.json() as AuditRequest
+
+    if (!url || !siteId) {
+      console.error('❌ Missing required fields')
+      return NextResponse.json(
+        { error: 'Missing required fields: url and siteId' },
+        { status: 400 }
       )
-      // For service calls, use the provided userId
-      authenticatedUserId = userId
-    } else {
-      // Regular client call - require authentication
-      const session = await getServerSession(authOptions)
-      
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      
-      authenticatedUserId = session.user.id
-      
-      supabase = await getSupabaseClient()
-      if (!supabase) {
-        return createAdminDisabledResponse()
-      }
     }
 
-    // Run accessibility audit using axe-core
-    const auditResults = await runAccessibilityAudit(url)
-
-    // Calculate score based on violations
-    const score = calculateScore(auditResults.violations)
-
-    // Process violations by severity
-    const bySeverity = {
-      critical: auditResults.violations.filter(v => v.impact === 'critical').length,
-      serious: auditResults.violations.filter(v => v.impact === 'serious').length,
-      moderate: auditResults.violations.filter(v => v.impact === 'moderate').length,
-      minor: auditResults.violations.filter(v => v.impact === 'minor').length,
-    }
-
-    // Create or update site if siteId provided
-    let site: Site | null = null
-    if (siteId) {
-      // Verify site belongs to authenticated user (for non-service calls)
-      let siteQuery = supabase
+    // Verify site ownership if userId provided
+    if (userId) {
+      console.log('🔒 Verifying site ownership...')
+      const { data: site, error: siteError } = await supabase
         .from('sites')
-        .select()
+        .select('id, url')
         .eq('id', siteId)
-      
-      // Add user restriction for regular authenticated calls
-      if (!serviceKey) {
-        siteQuery = siteQuery.eq('user_id', authenticatedUserId)
-      }
-      
-      const { data: existingSite, error: fetchError } = await siteQuery.single()
-      
-      if (fetchError || !existingSite) {
-        return NextResponse.json({ error: 'Site not found or access denied' }, { status: 404 })
-      }
-      
-      // Update existing site
-      const { data: updatedSite, error: updateError } = await supabase
-        .from('sites')
-        .update({
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', siteId)
-        .select()
+        .eq('user_id', userId)
         .single()
 
-      if (updateError) {
-        console.error('Error updating site:', updateError)
-        return NextResponse.json({ error: 'Failed to update site' }, { status: 500 })
+      if (siteError || !site) {
+        console.error('❌ Site ownership verification failed:', siteError)
+        return NextResponse.json(
+          { error: 'Site not found or unauthorized' },
+          { status: 403 }
+        )
       }
-      
-      site = updatedSite
-    } else {
-      // Create new site
-      const { data: newSite, error: createError } = await supabase
-        .from('sites')
-        .insert({
-          url,
-          name: getHostname(url),
-          user_id: authenticatedUserId,
-        })
-        .select()
-        .single()
-
-      if (createError) {
-        console.error('Error creating site:', createError)
-        return NextResponse.json({ error: 'Failed to create site' }, { status: 500 })
-      }
-
-      site = newSite
+      console.log('✅ Site ownership verified')
     }
 
-    // Create a scan record
+    // Create scan record
+    console.log('📝 Creating scan record...')
     const { data: scan, error: scanError } = await supabase
       .from('scans')
       .insert({
-        site_id: site?.id || siteId,
-        score,
-        status: 'completed',
-        started_at: new Date().toISOString(),
-        finished_at: new Date().toISOString(),
+        site_id: siteId,
+        status: 'running',
+        started_at: new Date().toISOString()
       })
       .select()
       .single()
 
-    if (scanError) {
-      console.error('Error creating scan:', scanError)
-      return NextResponse.json({ error: 'Failed to create scan' }, { status: 500 })
+    if (scanError || !scan) {
+      console.error('❌ Failed to create scan record:', scanError)
+      throw new Error('Failed to create scan record')
     }
+    console.log('✅ Scan record created:', scan.id)
 
-    // Create issue records for violations
-    if (auditResults.violations.length > 0) {
-      const issueInserts = auditResults.violations.map(violation => ({
-        scan_id: scan.id,
-        rule: violation.id || 'unknown',
-        selector: violation.nodes?.[0]?.target?.[0] || 'unknown',
-        severity: (violation.impact || 'minor') as 'critical' | 'serious' | 'moderate' | 'minor',
-        impact: (violation.impact || 'minor') as 'critical' | 'serious' | 'moderate' | 'minor' | null,
-        description: violation.description || null,
-        help_url: violation.helpUrl || null,
-        html: violation.nodes?.[0]?.html || null,
-      }))
+    // Run the accessibility scan
+    console.log('🔍 Running accessibility scan...')
+    const scanner = new AccessibilityScanner()
+    let results
+    try {
+      results = await scanner.scan({
+        url,
+        waitForSelector,
+        viewport: { width: 1280, height: 720 },
+        timeout: 30000
+      })
+      console.log('✅ Scan completed')
+    } catch (error) {
+      console.error('❌ Scan failed:', error)
+      
+      // Update scan record as failed with error message
+      const { error: updateError } = await supabase
+        .from('scans')
+        .update({
+          status: 'failed',
+          finished_at: new Date().toISOString(),
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        })
+        .eq('id', scan.id)
 
-      const { error: issuesError } = await supabase
-        .from('issues')
-        .insert(issueInserts)
-
-      if (issuesError) {
-        console.error('Error creating issues:', issuesError)
-        // Continue anyway, the scan was created successfully
+      if (updateError) {
+        console.error('❌ Failed to update failed scan record:', updateError)
       }
+
+      throw error
     }
 
+    // Store violations in the issues table
+    if (results.violations.length > 0) {
+      console.log(`📊 Storing ${results.violations.length} violations...`)
+      const issuePromises = results.violations.map(async (violation: Result) => {
+        // Get WCAG rule from tags
+        const wcagTag = violation.tags.find(tag => tag.startsWith('wcag'))
+        const wcagRule = wcagTag ? `WCAG ${wcagTag.slice(4, -1)}.${wcagTag.slice(-1).toUpperCase()}` : null
+
+        // Process each node in the violation
+        return Promise.all(violation.nodes.map(node => 
+          supabase
+            .from('issues')
+            .insert({
+              scan_id: scan.id,
+              rule: violation.id,
+              selector: node.target.join(', '),
+              severity: violation.impact || 'minor',
+              impact: violation.impact,
+              description: violation.description,
+              help_url: violation.helpUrl,
+              html: node.html,
+              failure_summary: node.failureSummary,
+              wcag_rule: wcagRule
+            })
+        ))
+      })
+
+      try {
+        await Promise.all(issuePromises.flat())
+        console.log('✅ Violations stored')
+      } catch (error) {
+        console.error('⚠️ Error storing violations:', error)
+        // Continue execution - we don't want to fail the whole scan if issue storage fails
+      }
+    } else {
+      console.log('ℹ️ No violations found')
+    }
+
+    // Update scan record with results
+    console.log('📝 Updating scan record...')
+    const { error: updateError } = await supabase
+      .from('scans')
+      .update({
+        status: 'completed',
+        score: results.score,
+        finished_at: new Date().toISOString(),
+        total_violations: results.violations.length,
+        passes: results.passes,
+        incomplete: results.incomplete,
+        inapplicable: results.inapplicable,
+        scan_time_ms: results.timeToScan,
+        error_message: null // Clear any previous error message
+      })
+      .eq('id', scan.id)
+
+    if (updateError) {
+      console.error('❌ Failed to update scan record:', updateError)
+      throw new Error(`Failed to update scan record: ${updateError.message}`)
+    }
+    console.log('✅ Scan record updated')
+
+    // Return success response
     return NextResponse.json({
       success: true,
       data: {
-        site,
-        scan,
+        scan: {
+          id: scan.id,
+          score: results.score,
+          status: 'completed',
+          total_violations: results.violations.length
+        }
       },
       summary: {
-        score,
-        violations: auditResults.violations.length,
-        by_severity: bySeverity,
-      },
+        score: results.score,
+        violations: results.violations.length,
+        passes: results.passes,
+        incomplete: results.incomplete,
+        inapplicable: results.inapplicable,
+        scan_time_ms: results.timeToScan
+      }
     })
 
   } catch (error) {
-    console.error('Audit API error:', error)
+    console.error('❌ Audit error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to run accessibility audit' 
+      },
       { status: 500 }
     )
-  }
-}
-
-async function runAccessibilityAudit(url: string) {
-  // In a real implementation, this would use puppeteer or similar to run axe on the actual page
-  // For now, we'll simulate the audit results
-  const mockViolations = [
-    {
-      id: 'color-contrast',
-      impact: 'serious',
-      description: 'Ensures the contrast between foreground and background colors meets WCAG 2 AA contrast ratio thresholds',
-      help: 'Elements must have sufficient color contrast',
-      helpUrl: 'https://dequeuniversity.com/rules/axe/4.6/color-contrast',
-      nodes: [
-        {
-          any: [],
-          all: [],
-          none: [],
-          impact: 'serious',
-          html: '<button class="btn-primary">Click me</button>',
-          target: ['button.btn-primary'],
-          xpath: ['/html/body/div/button'],
-          ancestry: ['html > body > div > button'],
-          text: 'Click me',
-        },
-      ],
-      tags: ['wcag2a', 'wcag143'],
-    },
-    {
-      id: 'image-alt',
-      impact: 'critical',
-      description: 'Ensures <img> elements have alternate text or a role of none or presentation',
-      help: 'Images must have alternate text',
-      helpUrl: 'https://dequeuniversity.com/rules/axe/4.6/image-alt',
-      nodes: [
-        {
-          any: [],
-          all: [],
-          none: [],
-          impact: 'critical',
-          html: '<img src="logo.png">',
-          target: ['img[src="logo.png"]'],
-          xpath: ['/html/body/img'],
-          ancestry: ['html > body > img'],
-          text: '',
-        },
-      ],
-      tags: ['wcag2a', 'wcag111'],
-    },
-  ]
-
-  // Simulate different results based on URL
-  const domain = new URL(url).hostname
-  const violationCount = domain.includes('test') ? 12 : 3
-
-  return {
-    violations: mockViolations.slice(0, violationCount),
-    passes: [],
-    incomplete: [],
-    inapplicable: [],
-  }
-}
-
-function calculateScore(violations: { impact: string }[]): number {
-  if (violations.length === 0) return 100
-
-  let deduction = 0
-  violations.forEach(violation => {
-    switch (violation.impact) {
-      case 'critical':
-        deduction += 25
-        break
-      case 'serious':
-        deduction += 15
-        break
-      case 'moderate':
-        deduction += 10
-        break
-      case 'minor':
-        deduction += 5
-        break
-    }
-  })
-
-  return Math.max(0, 100 - deduction)
-}
-
-function getHostname(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url
   }
 } 

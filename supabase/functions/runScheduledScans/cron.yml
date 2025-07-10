@@ -1,0 +1,8 @@
+# Cron configuration for scheduled accessibility scans
+# Runs every 12 hours at 6 AM and 6 PM UTC
+cron: "0 6,18 * * *"
+
+# Alternative configurations:
+# Every 6 hours: "0 */6 * * *"
+# Every 24 hours at 6 AM UTC: "0 6 * * *"
+# Every weekday at 9 AM UTC: "0 9 * * 1-5" 

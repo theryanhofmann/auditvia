@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supabase/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../auth/[...nextauth]/route'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/app/types/database'
 
 export async function GET() {
   try {
@@ -12,7 +14,7 @@ export async function GET() {
     }
 
     // Get Supabase client (admin or regular based on DEV_NO_ADMIN flag)
-    const supabase = await getSupabaseClient()
+    const supabase = await getSupabaseClient() as SupabaseClient<Database>
     if (!supabase) {
       return createAdminDisabledResponse()
     }
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get Supabase client (admin or regular based on DEV_NO_ADMIN flag)
-    const supabase = await getSupabaseClient()
+    const supabase = await getSupabaseClient() as SupabaseClient<Database>
     if (!supabase) {
       return createAdminDisabledResponse()
     }
