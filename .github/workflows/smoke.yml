@@ -14,6 +14,7 @@ jobs:
       DEV_NO_ADMIN: true
       DOCKER_MODE: true
       NODE_OPTIONS: --no-warnings
+      CI: true
 
     steps:
       - name: Checkout code
@@ -46,12 +47,14 @@ jobs:
         run: npm run build
 
       - name: Start server
+        env:
+          HOST: "0.0.0.0"
         run: npm start &
       - name: Wait for server to be ready
         run: |
           n=0
           until [ $n -ge 60 ]; do
-            if curl -sf http://localhost:3000/api/health; then
+            if curl -sf http://0.0.0.0:3000/api/health; then
               echo "Server is up!"
               break
             fi

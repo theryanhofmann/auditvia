@@ -14,9 +14,11 @@ class SmokeTest {
   constructor() {
     this.devMode = process.env.DEV_NO_ADMIN === 'true';
     this.dockerMode = process.env.DOCKER_MODE === 'true';
-    this.baseUrl = this.dockerMode
-      ? 'http://host.docker.internal:3000'
-      : 'http://localhost:3000';
+    this.baseUrl = process.env.CI 
+      ? 'http://0.0.0.0:3000'
+      : this.dockerMode
+        ? 'http://host.docker.internal:3000'
+        : 'http://localhost:3000';
     this.artifactsDir = join(process.cwd(), 'test-artifacts');
 
     // Create artifacts directory if it doesn't exist
