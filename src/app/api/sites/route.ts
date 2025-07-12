@@ -140,7 +140,15 @@ export async function GET() {
 
     const { data: sites, error: fetchError } = await supabase
       .from("sites")
-      .select("*")
+      .select(`
+        id,
+        url,
+        name,
+        custom_domain,
+        monitoring,
+        created_at,
+        updated_at
+      `)
       .eq("user_id", supabaseUser.id);
 
     if (fetchError) {
@@ -148,7 +156,13 @@ export async function GET() {
       return new Response(JSON.stringify({ error: "Failed to fetch sites" }), { status: 500 });
     }
 
-    return new Response(JSON.stringify({ sites }), { 
+    // Transform sites to ensure monitoring is never null
+    const transformedSites = sites?.map(site => ({
+      ...site,
+      monitoring: site.monitoring ?? false
+    }));
+
+    return new Response(JSON.stringify({ sites: transformedSites }), { 
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
