@@ -1,273 +1,124 @@
-import { Site } from "@/app/types/database";
+import type { Database } from "@/app/types/database";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/app/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/app/components/ui/dialog";
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
-import { useState } from "react";
-import { Loader2, Settings, History, Trash2, Play } from "lucide-react";
+import { createClient } from '@supabase/supabase-js'
+
+// Initialize Supabase client
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+type Site = Database['public']['Tables']['sites']['Row']
 
 interface SitesTableProps {
   sites: Site[];
-  onRunScan: (siteId: string) => Promise<void>;
-  onToggleMonitoring: (siteId: string, enabled: boolean) => Promise<void>;
-  onDeleteSite: (siteId: string) => Promise<void>;
-  isScanning: string | null;
-  onSiteUpdated?: () => void;
+  onSiteDeleted?: () => void;
+  onMonitoringToggled?: () => void;
 }
 
-export function SitesTable({ sites, onRunScan, onToggleMonitoring, onDeleteSite, isScanning, onSiteUpdated }: SitesTableProps) {
+export function SitesTable({ sites, onSiteDeleted, onMonitoringToggled }: SitesTableProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  const [selectedSite, setSelectedSite] = useState<Site | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", custom_domain: "" });
 
-  // Handle monitoring toggle
-  const handleMonitoringToggle = async (site: Site) => {
+  const handleDelete = async (siteId: string) => {
     try {
-      setLoading(site.id);
-      await onToggleMonitoring(site.id, !site.monitoring_enabled);
-      onSiteUpdated?.();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to toggle monitoring");
-    } finally {
-      setLoading(null);
-    }
-  };
+      const { error } = await supabase.from("sites").delete().eq("id", siteId);
 
-  // Handle site deletion
-  const handleDelete = async (site: Site) => {
-    try {
-      setLoading(site.id);
-      await onDeleteSite(site.id);
-      onSiteUpdated?.();
-      setDeleteDialogOpen(false);
-    } catch (error) {
-      console.error("Error deleting site:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to delete site");
-    } finally {
-      setLoading(null);
-      setSelectedSite(null);
-    }
-  };
-
-  // Handle settings update
-  const handleSettingsUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedSite) return;
-
-    try {
-      setLoading(selectedSite.id);
-      const response = await fetch(`/api/sites/${selectedSite.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update site settings");
+      if (error) {
+        throw error;
       }
 
-      toast.success("Site settings updated successfully");
-      onSiteUpdated?.();
-      setSettingsDialogOpen(false);
+      toast.success("Site deleted successfully");
+      onSiteDeleted?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update site settings");
-    } finally {
-      setLoading(null);
+      console.error("Error deleting site:", error);
+      toast.error("Failed to delete site");
     }
   };
 
-  // Open settings dialog
-  const openSettings = (site: Site) => {
-    setSelectedSite(site);
-    setEditForm({
-      name: site.name || "",
-      custom_domain: site.custom_domain || "",
-    });
-    setSettingsDialogOpen(true);
-  };
+  const toggleMonitoring = async (siteId: string, currentValue: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("sites")
+        .update({ monitoring_enabled: !currentValue })
+        .eq("id", siteId);
 
-  // Open delete dialog
-  const openDeleteDialog = (site: Site) => {
-    setSelectedSite(site);
-    setDeleteDialogOpen(true);
+      if (error) {
+        throw error;
+      }
+
+      toast.success(
+        `Monitoring ${!currentValue ? "enabled" : "disabled"} successfully`
+      );
+      onMonitoringToggled?.();
+    } catch (error) {
+      console.error("Error toggling monitoring:", error);
+      toast.error("Failed to update monitoring status");
+    }
   };
 
   return (
-    <div className="rounded-md border">
-      <div className="p-4">
-        <div className="relative w-full overflow-auto">
-          <table className="w-full caption-bottom text-sm">
-            <thead className="[&_tr]:border-b">
-              <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                <th className="h-12 px-4 text-left align-middle font-medium">Site</th>
-                <th className="h-12 px-4 text-left align-middle font-medium">URL</th>
-                <th className="h-12 px-4 text-left align-middle font-medium">Monitoring</th>
-                <th className="h-12 px-4 text-right align-middle font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="[&_tr:last-child]:border-0">
-              {sites.map((site) => (
-                <tr
-                  key={site.id}
-                  className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                >
-                  <td className="p-4 align-middle">{site.name}</td>
-                  <td className="p-4 align-middle">{site.url}</td>
-                  <td className="p-4 align-middle">
-                    <Switch
-                      checked={site.monitoring_enabled}
-                      disabled={loading === site.id || isScanning === site.id}
-                      onCheckedChange={() => handleMonitoringToggle(site)}
-                    />
-                  </td>
-                  <td className="p-4 align-middle text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => onRunScan(site.id)}
-                        disabled={loading === site.id || isScanning === site.id}
-                      >
-                        {loading === site.id || isScanning === site.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => openSettings(site)}
-                        disabled={loading === site.id || isScanning === site.id}
-                      >
-                        {loading === site.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Settings className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => router.push(`/dashboard/sites/${site.id}/history`)}
-                        disabled={loading === site.id || isScanning === site.id}
-                      >
-                        <History className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => openDeleteDialog(site)}
-                        disabled={loading === site.id || isScanning === site.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Settings Dialog */}
-      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Site Settings</DialogTitle>
-            <DialogDescription>
-              Update the settings for {selectedSite?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSettingsUpdate}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Site Name</Label>
-                <Input
-                  id="name"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="custom_domain">Custom Domain</Label>
-                <Input
-                  id="custom_domain"
-                  value={editForm.custom_domain}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, custom_domain: e.target.value })
-                  }
-                  placeholder="app.example.com"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="submit"
-                disabled={loading === selectedSite?.id}
-              >
-                {loading === selectedSite?.id ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete {selectedSite?.name} and all associated scan
-              data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => selectedSite && handleDelete(selectedSite)}
-              disabled={loading === selectedSite?.id}
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-zinc-200 dark:border-zinc-800">
+            <th className="text-left py-3 px-4">Name</th>
+            <th className="text-left py-3 px-4">URL</th>
+            <th className="text-center py-3 px-4">Monitoring</th>
+            <th className="text-right py-3 px-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sites.map((site) => (
+            <tr
+              key={site.id}
+              className="border-b border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
             >
-              {loading === selectedSite?.id ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Delete Site
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <td className="py-3 px-4">
+                <span className="font-medium">
+                  {site.name || new URL(site.url).hostname}
+                </span>
+              </td>
+              <td className="py-3 px-4">
+                <a
+                  href={site.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {site.url}
+                </a>
+              </td>
+              <td className="py-3 px-4 text-center">
+                <Switch
+                  checked={site.monitoring_enabled || false}
+                  onCheckedChange={() =>
+                    toggleMonitoring(site.id, site.monitoring_enabled || false)
+                  }
+                />
+              </td>
+              <td className="py-3 px-4 text-right space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/sites/${site.id}/history`)}
+                >
+                  History
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDelete(site.id)}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 } 

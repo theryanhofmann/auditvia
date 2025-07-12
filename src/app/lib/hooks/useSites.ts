@@ -2,7 +2,9 @@
 
 import useSWR from 'swr'
 import { useSession } from 'next-auth/react'
-import { Site } from '@/app/types/dashboard'
+import type { Database } from '@/app/types/database'
+
+type Site = Database['public']['Tables']['sites']['Row']
 
 interface SitesResponse {
   sites: any[]
@@ -16,23 +18,18 @@ const fetcher = async (url: string): Promise<Site[]> => {
   const data: SitesResponse = await response.json()
   
   // Transform the API response to match the Site interface
-  return data.sites?.map(site => {
-    return {
-      id: site.id,
-      url: site.url,
-      name: site.name,
-      description: null,
-      score: site.latest_score,
-      status: site.latest_score !== null ? 'completed' : 'idle',
-      last_scan: site.latest_scan_at,
-      created_at: site.created_at,
-      updated_at: site.updated_at,
-      monitoring_enabled: site.monitoring_enabled || false,
-      user_id: site.user_id,
-      latest_audit_result_id: null, // We'll implement this later if needed
-      custom_domain: site.custom_domain
-    }
-  }) || []
+  return data.sites?.map(site => ({
+    id: site.id,
+    url: site.url,
+    name: site.name,
+    created_at: site.created_at,
+    updated_at: site.updated_at,
+    monitoring_enabled: site.monitoring_enabled || false,
+    monitoring: site.monitoring || null,
+    user_id: site.user_id,
+    custom_domain: site.custom_domain,
+    github_id: site.github_id
+  })) || []
 }
 
 export function useSites() {

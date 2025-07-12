@@ -1,18 +1,6 @@
-export interface Site {
-  id: string
-  url: string
-  name: string | null
-  description?: string | null
-  score?: number | null
-  status?: 'idle' | 'scanning' | 'completed' | 'error' | 'queued' | null
-  last_scan?: string | null
-  created_at: string
-  updated_at: string
-  monitoring_enabled: boolean
-  user_id: string | null
-  latest_audit_result_id?: string | null
-  custom_domain: string | null
-}
+import type { Database } from './database'
+
+export type Site = Database['public']['Tables']['sites']['Row']
 
 export interface AuditResult {
   id: string

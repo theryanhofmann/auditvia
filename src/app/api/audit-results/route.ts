@@ -5,6 +5,25 @@ import { getSupabaseClient, createAdminDisabledResponse } from '@/app/lib/supaba
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/app/types/database'
 
+type ScanWithDetails = Database['public']['Tables']['scans']['Row'] & {
+  sites: {
+    id: string
+    url: string
+    name: string | null
+    user_id: string
+  }
+  issues: Array<{
+    id: number
+    rule: string
+    selector: string
+    severity: string
+    impact: string | null
+    description: string | null
+    help_url: string | null
+    html: string | null
+  }>
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -19,7 +38,6 @@ export async function GET(request: NextRequest) {
       const mockScans = [{
         id: `scan-${Date.now()}`,
         site_id: siteId || `site-${Date.now()}`,
-        score: 85,
         status: 'completed',
         created_at: new Date().toISOString(),
         finished_at: new Date().toISOString(),
@@ -51,10 +69,14 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         site_id,
-        score,
         status,
         created_at,
         finished_at,
+        total_violations,
+        passes,
+        incomplete,
+        inapplicable,
+        scan_time_ms,
         sites!inner (
           id,
           url,
@@ -100,54 +122,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'scanId is required' }, { status: 400 })
     }
 
-    // DEV_NO_ADMIN bypass for testing
-    if (process.env.DEV_NO_ADMIN === 'true') {
-      // Return mock scan with issues
-      const mockScan = {
-        id: scanId,
-        site_id: `site-${Date.now()}`,
-        score: 85,
-        status: 'completed',
-        created_at: new Date().toISOString(),
-        finished_at: new Date().toISOString(),
-        sites: {
-          id: `site-${Date.now()}`,
-          url: 'https://example.com',
-          name: 'example.com'
-        },
-        issues: [
-          {
-            id: 'issue-1',
-            rule: 'color-contrast',
-            selector: 'button.btn-primary',
-            severity: 'serious',
-            impact: 'serious',
-            description: 'Ensures the contrast between foreground and background colors meets WCAG 2 AA contrast ratio thresholds',
-            help_url: 'https://dequeuniversity.com/rules/axe/4.6/color-contrast',
-            html: '<button class="btn-primary">Click me</button>'
-          },
-          {
-            id: 'issue-2',
-            rule: 'image-alt',
-            selector: 'img[src="logo.png"]',
-            severity: 'critical',
-            impact: 'critical',
-            description: 'Ensures <img> elements have alternate text or a role of none or presentation',
-            help_url: 'https://dequeuniversity.com/rules/axe/4.6/image-alt',
-            html: '<img src="logo.png">'
-          }
-        ]
-      }
-
-      return NextResponse.json({ 
-        success: true,
-        scan: {
-          ...mockScan,
-          total_violations: mockScan.issues.length
-        }
-      })
-    }
-
     // Check authentication for regular API calls
     const session = await getServerSession(authOptions)
     
@@ -167,10 +141,14 @@ export async function POST(request: NextRequest) {
       .select(`
         id,
         site_id,
-        score,
         status,
         created_at,
         finished_at,
+        total_violations,
+        passes,
+        incomplete,
+        inapplicable,
+        scan_time_ms,
         sites!inner (
           id,
           url,
@@ -197,13 +175,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
     }
 
-    // Return scan data with issues (no need to insert, data already exists)
+    if (!scan) {
+      console.error('No scan found')
+      return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
+    }
+
+    const typedScan = scan as ScanWithDetails
 
     return NextResponse.json({ 
       success: true,
       scan: {
-        ...scan,
-        total_violations: scan.issues?.length || 0
+        ...typedScan,
+        total_violations: typedScan.issues?.length || 0
       }
     })
   } catch (error) {

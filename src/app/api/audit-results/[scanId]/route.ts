@@ -11,6 +11,25 @@ interface RouteContext {
   }>
 }
 
+type ScanWithDetails = Database['public']['Tables']['scans']['Row'] & {
+  sites: {
+    id: string
+    url: string
+    name: string | null
+    user_id: string
+  }
+  issues: Array<{
+    id: number
+    rule: string
+    selector: string
+    severity: string
+    impact: string | null
+    description: string | null
+    help_url: string | null
+    html: string | null
+  }>
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { scanId } = await context.params
@@ -25,7 +44,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
       const mockScan = {
         id: scanId,
         site_id: `site-${Date.now()}`,
-        score: 85,
         status: 'completed',
         created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
         finished_at: new Date(Date.now() - 3570000).toISOString(), // 30 seconds later
@@ -62,32 +80,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
               {
                 target: ['button.btn-secondary'],
                 html: '<button class="btn btn-secondary">Learn More</button>'
-              }
-            ]
-          },
-          {
-            id: 'heading-order',
-            impact: 'moderate',
-            description: 'Ensures the order of headings is semantically correct',
-            help: 'Heading levels should increase by one and should not skip levels.',
-            helpUrl: 'https://dequeuniversity.com/rules/axe/4.6/heading-order',
-            nodes: [
-              {
-                target: ['h4.section-title'],
-                html: '<h4 class="section-title">Features</h4>'
-              }
-            ]
-          },
-          {
-            id: 'label',
-            impact: 'minor',
-            description: 'Ensures every form element has a label',
-            help: 'Form elements must have labels to assist users using assistive technologies.',
-            helpUrl: 'https://dequeuniversity.com/rules/axe/4.6/label',
-            nodes: [
-              {
-                target: ['input[type="email"]'],
-                html: '<input type="email" placeholder="Enter your email">'
               }
             ]
           }
@@ -129,10 +121,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .select(`
         id,
         site_id,
-        score,
         status,
         created_at,
         finished_at,
+        total_violations,
+        passes,
+        incomplete,
+        inapplicable,
+        scan_time_ms,
         sites!inner (
           id,
           url,
@@ -159,21 +155,28 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Scan not found or access denied' }, { status: 404 })
     }
 
+    if (!scan) {
+      console.error('No scan found')
+      return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
+    }
+
+    const typedScan = scan as ScanWithDetails
+
     // Calculate duration and transform data
-    const duration = scan.finished_at && scan.created_at
-      ? Math.round((new Date(scan.finished_at).getTime() - new Date(scan.created_at).getTime()) / 1000)
+    const duration = typedScan.finished_at && typedScan.created_at
+      ? Math.round((new Date(typedScan.finished_at).getTime() - new Date(typedScan.created_at).getTime()) / 1000)
       : null
 
     // Group violations by impact level
     const violationsByImpact = {
-      critical: scan.issues?.filter((issue: any) => issue.impact === 'critical').length || 0,
-      serious: scan.issues?.filter((issue: any) => issue.impact === 'serious').length || 0,
-      moderate: scan.issues?.filter((issue: any) => issue.impact === 'moderate').length || 0,
-      minor: scan.issues?.filter((issue: any) => issue.impact === 'minor').length || 0
+      critical: typedScan.issues?.filter(issue => issue.impact === 'critical').length || 0,
+      serious: typedScan.issues?.filter(issue => issue.impact === 'serious').length || 0,
+      moderate: typedScan.issues?.filter(issue => issue.impact === 'moderate').length || 0,
+      minor: typedScan.issues?.filter(issue => issue.impact === 'minor').length || 0
     }
 
     // Transform issues to match expected format
-    const violations = scan.issues?.map((issue: any) => ({
+    const violations = typedScan.issues?.map(issue => ({
       id: issue.rule,
       impact: issue.impact,
       description: issue.description,
@@ -188,9 +191,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ 
       success: true,
       scan: {
-        ...scan,
+        ...typedScan,
         duration,
-        total_violations: scan.issues?.length || 0,
+        total_violations: typedScan.issues?.length || 0,
         violations_by_impact: violationsByImpact,
         violations
       }

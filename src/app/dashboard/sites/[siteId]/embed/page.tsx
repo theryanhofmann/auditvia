@@ -50,7 +50,7 @@ export default async function EmbedPage({
     .select("*")
     .eq("site_id", params.siteId)
     .eq("status", "completed")
-    .order("completed_at", { ascending: false })
+    .order("finished_at", { ascending: false })
     .limit(1)
     .single();
 

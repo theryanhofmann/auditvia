@@ -1,13 +1,10 @@
 'use client'
 
-import { useEffect, useState, forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
-import { formatDistanceToNow } from 'date-fns'
-import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from 'lucide-react'
-import { Badge } from '../ui/badge'
 
-// Initialize Supabase client once
+// Initialize Supabase client
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -15,12 +12,15 @@ const supabase = createClient<Database>(
 
 interface ScanTrend {
   id: string
-  scan_id: string
   site_id: string
-  score_change: number
+  previous_scan_id: string | null
   new_issues_count: number
   resolved_issues_count: number
-  created_at: string
+  critical_issues_delta: number
+  serious_issues_delta: number
+  moderate_issues_delta: number
+  minor_issues_delta: number
+  created_at: string | null
   site: {
     name: string | null
     url: string
@@ -28,7 +28,7 @@ interface ScanTrend {
 }
 
 export interface ScanTrendsPanelRef {
-  refresh: () => void
+  refresh: () => Promise<void>
 }
 
 export const ScanTrendsPanel = forwardRef<ScanTrendsPanelRef>(function ScanTrendsPanel(_, ref) {
@@ -66,7 +66,7 @@ export const ScanTrendsPanel = forwardRef<ScanTrendsPanelRef>(function ScanTrend
       }
 
       // Then fetch site details for each trend
-      const siteIds = [...new Set(trendData.map(t => t.site_id))]
+      const siteIds = [...new Set(trendData.map((t: { site_id: string }) => t.site_id))]
       const { data: siteData, error: siteError } = await supabase
         .from('sites')
         .select('id, name, url')
@@ -77,13 +77,13 @@ export const ScanTrendsPanel = forwardRef<ScanTrendsPanelRef>(function ScanTrend
       }
 
       // Combine the data
-      const siteMap = new Map(siteData.map(site => [site.id, site]))
-      const combinedData = trendData.map(trend => ({
+      const siteMap = new Map(siteData.map((site: { id: string; name: string | null; url: string }) => [site.id, site]))
+      const combinedData = trendData.map((trend: Database['public']['Tables']['scan_trends']['Row']) => ({
         ...trend,
         site: siteMap.get(trend.site_id) || { name: null, url: 'Unknown Site' }
       }))
 
-      setTrends(combinedData)
+      setTrends(combinedData as ScanTrend[])
     } catch (error) {
       console.error('Error fetching scan trends:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch scan trends')
@@ -101,113 +101,88 @@ export const ScanTrendsPanel = forwardRef<ScanTrendsPanelRef>(function ScanTrend
     refresh: fetchTrends
   }))
 
-  if (isLoading) {
+  if (error) {
     return (
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Recent Changes</h2>
-        </div>
-        <div className="space-y-4 animate-pulse">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 bg-zinc-100 dark:bg-zinc-800 rounded-lg" />
-          ))}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Recent Scan Trends</h2>
+          <div className="text-red-500">Error: {error}</div>
         </div>
       </div>
     )
   }
 
-  if (error) {
+  if (isLoading) {
     return (
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Recent Changes</h2>
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Recent Scan Trends</h2>
+          <div className="space-y-4">
+            <div className="h-4 w-full bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+            <div className="h-4 w-3/4 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+            <div className="h-4 w-1/2 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+          </div>
         </div>
-        <div className="text-center py-8 text-red-500">
-          <p className="text-sm">Error loading scan trends.</p>
-          <p className="text-xs mt-1">{error}</p>
+      </div>
+    )
+  }
+
+  if (!trends.length) {
+    return (
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Recent Scan Trends</h2>
+          <div className="text-gray-500">No scan trends available yet.</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Recent Changes</h2>
-      </div>
-
-      <div className="space-y-4">
-        {trends.length === 0 ? (
-          <div className="text-center py-8 text-zinc-500 dark:text-zinc-400">
-            <p className="text-sm">No recent changes found.</p>
-            <p className="text-xs mt-1">Changes will appear here after running multiple scans.</p>
-          </div>
-        ) : (
-          trends.map(trend => (
-            <div
-              key={trend.id}
-              className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg"
-            >
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                  {trend.site.name || trend.site.url}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                  {formatDistanceToNow(new Date(trend.created_at), { addSuffix: true })}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 ml-4">
-                {/* Score Change */}
-                <div className="flex items-center gap-1">
-                  {trend.score_change === 0 ? (
-                    <MinusIcon className="w-4 h-4 text-zinc-400" />
-                  ) : trend.score_change > 0 ? (
-                    <ArrowUpIcon className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <ArrowDownIcon className="w-4 h-4 text-red-500" />
-                  )}
-                  <span
-                    className={`text-sm font-medium ${
-                      trend.score_change === 0
-                        ? 'text-zinc-400 dark:text-zinc-500'
-                        : trend.score_change > 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}
-                  >
-                    {trend.score_change > 0 ? '+' : ''}
-                    {trend.score_change}
-                  </span>
+    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <div className="p-4">
+        <h2 className="text-lg font-semibold mb-4">Recent Scan Trends</h2>
+        <div className="space-y-4">
+          {trends.map(trend => (
+            <div key={trend.id} className="border-b pb-4 last:border-b-0">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-medium">{trend.site.name || trend.site.url}</h4>
+                  <p className="text-sm text-gray-500">
+                    {new Date(trend.created_at!).toLocaleDateString()}
+                  </p>
                 </div>
-
-                {/* New Issues */}
-                <Badge
-                  variant="outline"
-                  className={
-                    trend.new_issues_count === 0
-                      ? 'text-zinc-400 dark:text-zinc-500'
-                      : 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50'
-                  }
-                >
-                  +{trend.new_issues_count} new
-                </Badge>
-
-                {/* Resolved Issues */}
-                <Badge
-                  variant="outline"
-                  className={
-                    trend.resolved_issues_count === 0
-                      ? 'text-zinc-400 dark:text-zinc-500'
-                      : 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-900/50'
-                  }
-                >
-                  {trend.resolved_issues_count} fixed
-                </Badge>
+                <div className="text-right">
+                  <p className="text-sm">
+                    {trend.new_issues_count > 0 && (
+                      <span className="text-red-500">+{trend.new_issues_count} new</span>
+                    )}
+                    {trend.new_issues_count > 0 && trend.resolved_issues_count > 0 && ' / '}
+                    {trend.resolved_issues_count > 0 && (
+                      <span className="text-green-500">{trend.resolved_issues_count} fixed</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-red-500">Critical: {trend.critical_issues_delta}</span>
+                  </div>
+                  <div>
+                    <span className="text-orange-500">Serious: {trend.serious_issues_delta}</span>
+                  </div>
+                  <div>
+                    <span className="text-yellow-500">Moderate: {trend.moderate_issues_delta}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-500">Minor: {trend.minor_issues_delta}</span>
+                  </div>
+                </div>
               </div>
             </div>
-          ))
-        )}
+          ))}
+        </div>
       </div>
     </div>
   )

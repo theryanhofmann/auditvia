@@ -5,6 +5,10 @@ import { authOptions } from '../auth/[...nextauth]/route'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/app/types/database'
 
+type SiteWithScans = Database['public']['Tables']['sites']['Row'] & {
+  scans: Array<Database['public']['Tables']['scans']['Row']>
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -29,7 +33,8 @@ export async function GET() {
         user_id,
         scans (
           created_at,
-          score
+          status,
+          total_violations
         )
       `)
       .eq('user_id', session.user.id)
@@ -44,23 +49,16 @@ export async function GET() {
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-    const sitesToScan = sites?.filter(site => {
+    const typedSites = sites as SiteWithScans[]
+    const sitesToScan = typedSites?.filter(site => {
       const lastScan = site.scans?.[0]
       if (!lastScan) return true // Never scanned
       
-      const lastScanDate = new Date(lastScan.created_at)
+      const lastScanDate = new Date(lastScan.created_at!)
       return lastScanDate < sevenDaysAgo
     }) || []
 
-    return NextResponse.json({ 
-      sitesToScan: sitesToScan.map(site => ({
-        id: site.id,
-        url: site.url,
-        name: site.name,
-        lastScanDate: site.scans?.[0]?.created_at || null,
-        lastScore: site.scans?.[0]?.score || null
-      }))
-    })
+    return NextResponse.json({ sites: sitesToScan })
   } catch (error) {
     console.error('Error in GET /api/scheduled-scans:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
