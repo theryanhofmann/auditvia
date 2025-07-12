@@ -4,7 +4,11 @@ import { authOptions } from '../auth/[...nextauth]/route'
 import { createServerClient } from '@supabase/ssr'
 import { runA11yScan } from '../../../../scripts/runA11yScan'
 import type { Database } from '@/app/types/database'
-import type { ScanInsert, IssueInsert, SeverityLevel } from '@/app/types/database'
+
+type ScanInsert = Database['public']['Tables']['scans']['Insert']
+type IssueInsert = Database['public']['Tables']['issues']['Insert']
+type SeverityLevel = 'critical' | 'serious' | 'moderate' | 'minor'
+
 import { cookies } from 'next/headers'
 
 type TypedSupabaseClient = ReturnType<typeof createServerClient<Database>>
@@ -86,7 +90,6 @@ async function createScan(
     site_id: siteId,
     status,
     started_at: new Date().toISOString(),
-    score: null,
     finished_at: null
   }
 
@@ -128,10 +131,15 @@ async function createIssues(
     html: issue.html
   }))
 
-  // Log issue breakdown
-  const breakdown = scanResult.summary.byImpact
-  console.log('📊 Issues by severity:')
-  console.table(breakdown)
+  // Log issue breakdown by impact
+  const byImpact = scanResult.issues.reduce((acc, issue) => {
+    const impact = issue.impact || 'minor'
+    acc[impact] = (acc[impact] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  
+  console.log('📊 Issues by impact:')
+  console.table(byImpact)
 
   const { error: issuesError } = await supabase
     .from('issues')
@@ -149,17 +157,27 @@ async function updateScanStatus(
   supabase: TypedSupabaseClient,
   scanId: string,
   status: ScanInsert['status'],
-  score?: number | null
+  scanResult?: Awaited<ReturnType<typeof runA11yScan>>
 ): Promise<void> {
-  console.log('📝 Updating scan status:', { scanId, status, score })
+  console.log('📝 Updating scan status:', { scanId, status })
   
+  const updateData: Partial<ScanInsert> = {
+    status,
+    finished_at: new Date().toISOString()
+  }
+
+  // Add scan metrics if available
+  if (scanResult) {
+    updateData.total_violations = scanResult.totalViolations
+    updateData.passes = scanResult.passes
+    updateData.incomplete = scanResult.incomplete
+    updateData.inapplicable = scanResult.inapplicable
+    updateData.scan_time_ms = scanResult.timeToScan
+  }
+
   const { error: updateError } = await supabase
     .from('scans')
-    .update({
-      status,
-      score,
-      finished_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('id', scanId)
 
   if (updateError) {
@@ -200,79 +218,57 @@ export async function POST(request: NextRequest) {
           get(name: string) {
             return cookieStore.get(name)?.value
           },
-          set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set(name, value, options)
-            } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
+          set(name: string, value: string) {
+            cookieStore.set(name, value)
           },
-          remove(name: string, options: any) {
-            try {
-              cookieStore.set(name, '', options)
-            } catch {
-              // The `remove` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
+          remove(name: string) {
+            cookieStore.delete(name)
           }
         }
       }
     )
 
-    // 4. Get or create Supabase user
-    const supabaseUser = await getOrCreateUser(supabase, session.user.id)
+    // 4. Get or create user
+    const user = await getOrCreateUser(supabase, session.user.id)
 
     // 5. Verify site ownership
-    const site = await verifySiteOwnership(supabase, body.siteId, supabaseUser.id)
+    const site = await verifySiteOwnership(supabase, body.siteId, user.id)
 
     // 6. Create initial scan record
     const scan = await createScan(supabase, site.id)
 
-    try {
-      // 7. Run accessibility scan
-      console.log('🔍 Starting accessibility scan for:', site.url)
-      const scanResult = await runA11yScan(body.url || site.url)
-      console.log('✅ Scan completed with score:', scanResult.score)
+    // 7. Run accessibility scan
+    console.log('🔍 Running accessibility scan for:', site.url)
+    const scanResult = await runA11yScan(body.url || site.url)
+    console.log('✅ Scan completed')
 
-      // 8. Create issue records
-      await createIssues(supabase, scan.id, scanResult)
+    // 8. Store issues
+    await createIssues(supabase, scan.id, scanResult)
 
-      // 9. Update scan status to completed
-      await updateScanStatus(supabase, scan.id, 'completed', scanResult.score)
+    // 9. Update scan status
+    await updateScanStatus(supabase, scan.id, 'completed', scanResult)
 
-      // 10. Return success response
-      console.log('🎉 Scan process completed successfully')
-      return NextResponse.json({
-        success: true,
-        data: {
-          scan: {
-            id: scan.id,
-            score: scanResult.score,
-            status: 'completed'
-          },
-          summary: scanResult.summary
+    // 10. Return success response
+    return NextResponse.json({
+      success: true,
+      data: {
+        scan: {
+          id: scan.id,
+          status: 'completed',
+          total_violations: scanResult.totalViolations,
+          passes: scanResult.passes,
+          incomplete: scanResult.incomplete,
+          inapplicable: scanResult.inapplicable,
+          scan_time_ms: scanResult.timeToScan
         }
-      })
-
-    } catch (error) {
-      // Handle scan-specific errors
-      console.error('❌ Error during scan process:', error)
-      await updateScanStatus(supabase, scan.id, 'failed')
-      return NextResponse.json({
-        error: 'Failed to complete accessibility scan',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }, { status: 500 })
-    }
+      }
+    })
 
   } catch (error) {
-    // Handle general errors
-    console.error('❌ Unhandled error in scan endpoint:', error)
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error('❌ Scan error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to run scan' },
+      { status: 500 }
+    )
   }
 } 

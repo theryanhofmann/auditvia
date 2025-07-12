@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
-import { cookies } from 'next/headers'
 import { AccessibilityScanner } from '../../../../scripts/runA11yScan'
 import type { Result } from 'axe-core'
 
@@ -14,36 +13,17 @@ interface AuditRequest {
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient<Database>(
+    // Initialize Supabase client with service role key
+    const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set(name, value, options)
-            } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          },
-          remove(name: string, options: any) {
-            try {
-              cookieStore.set(name, '', options)
-            } catch {
-              // The `remove` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          }
+        auth: {
+          persistSession: false
         }
       }
     )
+
     console.log('🚀 Starting audit request...')
     const { url, siteId, userId, waitForSelector } = await request.json() as AuditRequest
 
@@ -58,11 +38,26 @@ export async function POST(request: Request) {
     // Verify site ownership if userId provided
     if (userId) {
       console.log('🔒 Verifying site ownership...')
+      // First get the user's Supabase ID from their GitHub ID
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('github_id', userId as string)
+        .single()
+
+      if (userError || !user) {
+        console.error('❌ User lookup failed:', userError)
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        )
+      }
+
       const { data: site, error: siteError } = await supabase
         .from('sites')
         .select('id, url')
-        .eq('id', siteId)
-        .eq('user_id', userId)
+        .eq('id', siteId as string)
+        .eq('user_id', user!.id as string)
         .single()
 
       if (siteError || !site) {
@@ -79,11 +74,11 @@ export async function POST(request: Request) {
     console.log('📝 Creating scan record...')
     const { data: scan, error: scanError } = await supabase
       .from('scans')
-      .insert({
-        site_id: siteId,
+      .insert([{
+        site_id: siteId as string,
         status: 'running',
         started_at: new Date().toISOString()
-      })
+      }])
       .select()
       .single()
 
@@ -108,18 +103,21 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error('❌ Scan failed:', error)
       
-      // Update scan record as failed with error message
+      // Update scan record as failed
       const { error: updateError } = await supabase
-        .from('scans')
-        .update({
-          status: 'failed',
-          finished_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : 'Unknown error'
+        .rpc('update_scan_record', {
+          p_scan_id: scan!.id as string,
+          p_status: 'failed',
+          p_finished_at: new Date().toISOString(),
+          p_total_violations: 0,
+          p_passes: 0,
+          p_incomplete: 0,
+          p_inapplicable: 0,
+          p_scan_time_ms: 0
         })
-        .eq('id', scan.id)
 
       if (updateError) {
-        console.error('❌ Failed to update failed scan record:', updateError)
+        console.error('❌ Failed to update failed scan record:', JSON.stringify(updateError, null, 2))
       }
 
       throw error
@@ -137,8 +135,8 @@ export async function POST(request: Request) {
         return Promise.all(violation.nodes.map(node => 
           supabase
             .from('issues')
-            .insert({
-              scan_id: scan.id,
+            .insert([{
+              scan_id: scan!.id as string,
               rule: violation.id,
               selector: node.target.join(', '),
               severity: violation.impact || 'minor',
@@ -148,7 +146,7 @@ export async function POST(request: Request) {
               html: node.html,
               failure_summary: node.failureSummary,
               wcag_rule: wcagRule
-            })
+            }])
         ))
       })
 
@@ -166,19 +164,16 @@ export async function POST(request: Request) {
     // Update scan record with results
     console.log('📝 Updating scan record...')
     const { error: updateError } = await supabase
-      .from('scans')
-      .update({
-        status: 'completed',
-        score: results.score,
-        finished_at: new Date().toISOString(),
-        total_violations: results.violations.length,
-        passes: results.passes,
-        incomplete: results.incomplete,
-        inapplicable: results.inapplicable,
-        scan_time_ms: results.timeToScan,
-        error_message: null // Clear any previous error message
+      .rpc('update_scan_record', {
+        p_scan_id: scan!.id as string,
+        p_status: 'completed',
+        p_finished_at: new Date().toISOString(),
+        p_total_violations: results.violations.length,
+        p_passes: results.passes,
+        p_incomplete: results.incomplete,
+        p_inapplicable: results.inapplicable,
+        p_scan_time_ms: results.timeToScan
       })
-      .eq('id', scan.id)
 
     if (updateError) {
       console.error('❌ Failed to update scan record:', updateError)
@@ -191,19 +186,26 @@ export async function POST(request: Request) {
       success: true,
       data: {
         scan: {
-          id: scan.id,
-          score: results.score,
+          id: scan!.id as string,
           status: 'completed',
-          total_violations: results.violations.length
+          total_violations: results.violations.length,
+          passes: results.passes,
+          incomplete: results.incomplete,
+          inapplicable: results.inapplicable,
+          scan_time_ms: results.timeToScan
         }
       },
       summary: {
-        score: results.score,
         violations: results.violations.length,
         passes: results.passes,
         incomplete: results.incomplete,
         inapplicable: results.inapplicable,
-        scan_time_ms: results.timeToScan
+        scan_time_ms: results.timeToScan,
+        by_impact: results.violations.reduce((acc, v) => {
+          const impact = v.impact || 'minor'
+          acc[impact] = (acc[impact] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
       }
     })
 

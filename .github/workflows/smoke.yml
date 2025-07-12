@@ -47,7 +47,15 @@ jobs:
         run: npm start &
 
       - name: Run smoke tests
+        id: smoke-test
         run: npm run smoke
+
+      - name: Ensure artifacts directory exists
+        if: always()
+        run: |
+          mkdir -p test-artifacts
+          echo "Test run at $(date)" > test-artifacts/test-info.txt
+          echo "Exit code: $?" >> test-artifacts/test-info.txt
 
       - name: Upload test artifacts (if any)
         if: always()
@@ -56,3 +64,4 @@ jobs:
         with:
           name: test-artifacts
           path: test-artifacts/
+          if-no-files-found: ignore

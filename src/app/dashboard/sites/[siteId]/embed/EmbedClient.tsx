@@ -35,8 +35,8 @@ export function EmbedClient({ site, latestScan }: EmbedClientProps) {
     );
   }
 
-  // Ensure score is a number, default to 0 if null
-  const score = typeof latestScan.score === 'number' ? latestScan.score : 0;
+  // Get total violations, default to 0 if null
+  const totalViolations = latestScan.total_violations ?? 0;
 
   return (
     <div className="p-6 max-w-2xl">
@@ -46,7 +46,7 @@ export function EmbedClient({ site, latestScan }: EmbedClientProps) {
         <h2 className="text-lg font-semibold mb-4">Preview</h2>
         <div className="p-8 rounded-lg border mb-4 bg-gray-50">
           <TrustBadge
-            score={score}
+            totalViolations={totalViolations}
             scanId={latestScan.id}
             theme={theme}
             layout={layout}

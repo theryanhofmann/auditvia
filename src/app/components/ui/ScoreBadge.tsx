@@ -1,15 +1,15 @@
 interface ScoreBadgeProps {
-  score: number
+  totalViolations: number
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }
 
-export function ScoreBadge({ score, size = 'md', className = '' }: ScoreBadgeProps) {
-  // Determine color based on score
-  const getColor = (score: number) => {
-    if (score >= 90) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-    if (score >= 70) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-    if (score >= 50) return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+export function ScoreBadge({ totalViolations, size = 'md', className = '' }: ScoreBadgeProps) {
+  // Determine color based on number of violations
+  const getColor = (violations: number) => {
+    if (violations === 0) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+    if (violations <= 5) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+    if (violations <= 10) return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
   }
 
@@ -20,12 +20,14 @@ export function ScoreBadge({ score, size = 'md', className = '' }: ScoreBadgePro
     lg: 'text-base px-4 py-1.5'
   }
 
+  const violationText = totalViolations === 1 ? 'Issue' : 'Issues'
+
   return (
     <div
-      className={`inline-flex items-center rounded-full font-medium ${sizeClasses[size]} ${getColor(score)} ${className}`}
-      title={`Accessibility Score: ${score}/100`}
+      className={`inline-flex items-center rounded-full font-medium ${sizeClasses[size]} ${getColor(totalViolations)} ${className}`}
+      title={`${totalViolations} Accessibility ${violationText} Found`}
     >
-      {score}/100
+      {totalViolations} {violationText}
     </div>
   )
 } 

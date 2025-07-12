@@ -2,11 +2,14 @@
 
 import { chromium } from 'playwright'
 import { expect } from '@playwright/test'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { join } from 'path'
 
 class SmokeTest {
   private baseUrl: string;
   private devMode: boolean;
   private dockerMode: boolean;
+  private artifactsDir: string;
 
   constructor() {
     this.devMode = process.env.DEV_NO_ADMIN === 'true';
@@ -14,13 +17,47 @@ class SmokeTest {
     this.baseUrl = this.dockerMode
       ? 'http://host.docker.internal:3000'
       : 'http://localhost:3000';
+    this.artifactsDir = join(process.cwd(), 'test-artifacts');
+
+    // Create artifacts directory if it doesn't exist
+    if (!existsSync(this.artifactsDir)) {
+      mkdirSync(this.artifactsDir, { recursive: true });
+    }
 
     console.log('🚀 Starting Auditvia E2E Smoke Test');
     console.log('Base URL:', this.baseUrl);
     console.log('Dev Mode:', this.devMode ? 'YES' : 'NO (requires auth)');
     console.log('Docker Mode:', this.dockerMode ? 'YES' : 'NO');
     console.log('Node Options:', process.env.NODE_OPTIONS || 'none');
+    console.log('Artifacts Dir:', this.artifactsDir);
     console.log('');
+  }
+
+  private async saveArtifacts(error: unknown, page: any) {
+    try {
+      // Save error details
+      const errorLog = {
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      };
+      writeFileSync(
+        join(this.artifactsDir, 'error.json'),
+        JSON.stringify(errorLog, null, 2)
+      );
+
+      // Save screenshot if we have a page
+      if (page) {
+        await page.screenshot({
+          path: join(this.artifactsDir, 'failure-screenshot.png'),
+          fullPage: true
+        });
+      }
+
+      console.log('[SMOKE] Saved test artifacts to:', this.artifactsDir);
+    } catch (artifactError) {
+      console.error('[SMOKE] Failed to save artifacts:', artifactError);
+    }
   }
 
   async waitForServer(maxAttempts = 60, interval = 2000): Promise<void> {
@@ -60,17 +97,20 @@ class SmokeTest {
   }
 
   async run(): Promise<void> {
+    let browser;
+    let page;
+    
     try {
       // Wait for server to be ready
       await this.waitForServer()
 
       // Launch browser
-      const browser = await chromium.launch({
+      browser = await chromium.launch({
         args: process.env.DOCKER_CONTAINER === 'true' ? ['--no-sandbox'] : []
       })
 
       const context = await browser.newContext()
-      const page = await context.newPage()
+      page = await context.newPage()
 
       // Navigate to home page
       console.log('[SMOKE] Navigating to home page...')
@@ -87,6 +127,13 @@ class SmokeTest {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error('[SMOKE] ❌ Smoke test failed:', errorMessage)
+      
+      // Save artifacts on failure
+      await this.saveArtifacts(error, page)
+      
+      if (browser) {
+        await browser.close()
+      }
       process.exit(1)
     }
   }

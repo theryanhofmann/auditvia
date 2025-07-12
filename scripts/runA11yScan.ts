@@ -12,7 +12,6 @@ interface ScanOptions {
 }
 
 interface ScanResult {
-  score: number
   violations: Result[]
   timestamp: string
   url: string
@@ -28,15 +27,8 @@ interface ScanResult {
     helpUrl: string
     selector: string
     html: string
+    wcagTags: string[]
   }>
-  summary: {
-    byImpact: {
-      critical?: number
-      serious?: number
-      moderate?: number
-      minor?: number
-    }
-  }
 }
 
 export class AccessibilityScanner {
@@ -48,8 +40,7 @@ export class AccessibilityScanner {
     if (!this.browser) {
       this.browser = await chromium.launch({
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        // Set headless: false temporarily for debugging
-        headless: false
+        headless: true
       })
       console.log('✅ Browser launched')
     }
@@ -71,38 +62,6 @@ export class AccessibilityScanner {
       this.browser = null
       console.log('✅ Browser closed')
     }
-  }
-
-  private calculateScore(violations: Result[]): number {
-    // Weight different impact levels
-    const weights = {
-      critical: 25,
-      serious: 10,
-      moderate: 5,
-      minor: 2
-    }
-
-    let totalImpact = 0
-    let maxPossibleImpact = 0
-
-    violations.forEach(violation => {
-      const weight = weights[violation.impact as keyof typeof weights] || 0
-      totalImpact += weight * violation.nodes.length
-      maxPossibleImpact += weights.critical * violation.nodes.length
-    })
-
-    // Calculate score (100 = perfect, 0 = worst)
-    const score = maxPossibleImpact > 0 
-      ? Math.max(0, 100 - (totalImpact / maxPossibleImpact) * 100)
-      : 100
-
-    console.log('📊 Score calculation:', {
-      totalImpact,
-      maxPossibleImpact,
-      finalScore: Math.round(score)
-    })
-
-    return Math.round(score)
   }
 
   public async scan(options: ScanOptions): Promise<ScanResult> {
@@ -206,19 +165,12 @@ export class AccessibilityScanner {
           console.log('Impact:', violation.impact)
           console.log('Description:', violation.description)
           console.log('Help URL:', violation.helpUrl)
+          console.log('WCAG Tags:', violation.tags.filter(tag => tag.startsWith('wcag')).join(', '))
         })
       }
 
-      // Calculate summary by impact
-      const byImpact = results.violations.reduce((acc, violation) => {
-        const impact = violation.impact as keyof typeof acc
-        acc[impact] = (acc[impact] || 0) + violation.nodes.length
-        return acc
-      }, {} as Record<string, number>)
-
       // Prepare final result
       const scanResult: ScanResult = {
-        score: this.calculateScore(results.violations),
         violations: results.violations,
         timestamp: new Date().toISOString(),
         url: options.url,
@@ -234,12 +186,10 @@ export class AccessibilityScanner {
             description: violation.description,
             helpUrl: violation.helpUrl,
             selector: node.target.join(' '),
-            html: node.html
+            html: node.html,
+            wcagTags: violation.tags.filter(tag => tag.startsWith('wcag'))
           }))
-        ),
-        summary: {
-          byImpact
-        }
+        )
       }
 
       return scanResult

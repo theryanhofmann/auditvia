@@ -1,12 +1,11 @@
 "use server";
 
 import { getServerSession } from "next-auth";
-import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/app/types/database";
-import { cookies } from "next/headers";
 import { authOptions } from "../auth/[...nextauth]/route";
 
-type TypedSupabaseClient = ReturnType<typeof createServerClient<Database>>;
+type TypedSupabaseClient = ReturnType<typeof createClient<Database>>;
 
 async function getOrCreateUser(supabase: TypedSupabaseClient, githubId: string): Promise<{ id: string }> {
   // Try to find existing user
@@ -47,36 +46,11 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerClient<Database>(
+    // Initialize Supabase client with service role key
+    const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set(name, value, options)
-            } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          },
-          remove(name: string, options: any) {
-            try {
-              cookieStore.set(name, '', options)
-            } catch {
-              // The `remove` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          }
-        }
-      }
-    )
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     // Get or create user
     let supabaseUser;
@@ -150,36 +124,11 @@ export async function GET() {
       return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerClient<Database>(
+    // Initialize Supabase client with service role key
+    const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set(name, value, options)
-            } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          },
-          remove(name: string, options: any) {
-            try {
-              cookieStore.set(name, '', options)
-            } catch {
-              // The `remove` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          }
-        }
-      }
-    )
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     // Get or create user
     let supabaseUser;

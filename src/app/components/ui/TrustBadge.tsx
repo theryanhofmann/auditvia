@@ -2,14 +2,14 @@ import { cn } from "@/app/lib/utils";
 import { ScoreBadge } from "./ScoreBadge";
 
 export interface TrustBadgeProps {
-  score: number;
+  totalViolations: number;
   scanId: string;
   theme?: "light" | "dark";
   layout?: "full" | "compact";
   className?: string;
 }
 
-export function TrustBadge({ score, scanId, theme = "light", layout = "full", className }: TrustBadgeProps) {
+export function TrustBadge({ totalViolations, scanId, theme = "light", layout = "full", className }: TrustBadgeProps) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://auditvia.com";
   const reportUrl = `${baseUrl}/report/${scanId}`;
 
@@ -27,7 +27,7 @@ export function TrustBadge({ score, scanId, theme = "light", layout = "full", cl
         className
       )}
     >
-      <ScoreBadge score={score} size={layout === "compact" ? "sm" : "md"} />
+      <ScoreBadge totalViolations={totalViolations} size={layout === "compact" ? "sm" : "md"} />
       <div className="flex flex-col">
         <span className="font-medium">
           Auditvia Verified

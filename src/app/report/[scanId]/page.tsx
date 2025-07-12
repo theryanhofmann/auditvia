@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = await createClient()
   const { data: scan } = await supabase
     .from('scans')
-    .select('url, score, created_at')
+    .select('url, total_violations, created_at')
     .eq('id', params.scanId)
     .single()
 
@@ -29,22 +29,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const domain = new URL(scan.url).hostname
-  const score = scan.score || 0
+  const violations = scan.total_violations || 0
   const date = new Date(scan.created_at).toLocaleDateString()
+  const violationText = violations === 1 ? 'issue' : 'issues'
 
   return {
-    title: `Accessibility Report for ${domain} - Score: ${score}/100 - Auditvia`,
-    description: `View the detailed accessibility audit report for ${domain}. Scanned on ${date} with a score of ${score}/100. Powered by Auditvia.`,
+    title: `Accessibility Report for ${domain} - ${violations} ${violationText} found - Auditvia`,
+    description: `View the detailed accessibility audit report for ${domain}. Scanned on ${date} with ${violations} accessibility ${violationText}. Powered by Auditvia.`,
     openGraph: {
       title: `Accessibility Report for ${domain}`,
-      description: `View the detailed accessibility audit report for ${domain}. Scanned on ${date} with a score of ${score}/100.`,
+      description: `View the detailed accessibility audit report for ${domain}. Scanned on ${date} with ${violations} accessibility ${violationText}.`,
       type: 'article',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/report/${params.scanId}`,
     },
     twitter: {
       card: 'summary',
       title: `Accessibility Report for ${domain}`,
-      description: `View the detailed accessibility audit report for ${domain}. Score: ${score}/100`,
+      description: `View the detailed accessibility audit report for ${domain}. Found ${violations} accessibility ${violationText}.`,
     },
   }
 }
@@ -58,8 +59,10 @@ async function getScanById(scanId: string) {
     .select(`
       id,
       url,
-      score,
-      violations,
+      total_violations,
+      passes,
+      incomplete,
+      inapplicable,
       created_at,
       report_data,
       sites (
@@ -135,15 +138,15 @@ export default async function ReportPage({ params }: Props) {
               <ShareButton url={reportUrl} />
             </div>
 
-            {/* Score Summary */}
+            {/* Scan Summary */}
             <div className="mt-6 flex items-center gap-4">
-              <ScoreBadge score={scan.score || 0} size="lg" />
+              <ScoreBadge totalViolations={scan.total_violations || 0} size="lg" />
               <div className="text-sm">
                 <div className="font-medium text-gray-900 dark:text-gray-100">
-                  Accessibility Score
+                  Scan Results
                 </div>
                 <div className="text-gray-500 dark:text-gray-400">
-                  {scan.violations} violations found
+                  {scan.passes || 0} passes, {scan.incomplete || 0} incomplete, {scan.inapplicable || 0} inapplicable
                 </div>
               </div>
             </div>

@@ -24,17 +24,59 @@
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../src/app/types/database'
-import type { 
-  Site, 
-  ScanInsert, 
-  IssueInsert,
-  SeverityLevel 
-} from '../src/app/types/database'
 import { runA11yScan } from './runA11yScan'
 import { appendFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { format } from 'date-fns'
 import type { ImpactValue } from 'axe-core'
+
+type Site = Database['public']['Tables']['sites']['Row']
+type ScanInsert = Database['public']['Tables']['scans']['Insert']
+type IssueInsert = Database['public']['Tables']['issues']['Insert']
+type SeverityLevel = 'critical' | 'serious' | 'moderate' | 'minor'
+
+type ScanIssue = {
+  rule: string
+  impact: ImpactValue
+  description: string
+  helpUrl: string
+  selector: string
+  html: string
+}
+
+type ScanResult = {
+  id: string
+  issues: ScanIssue[]
+  trends?: {
+    newIssuesCount: number
+    resolvedIssuesCount: number
+    criticalIssuesDelta: number
+    seriousIssuesDelta: number
+    moderateIssuesDelta: number
+    minorIssuesDelta: number
+  }
+}
+
+interface MonitoringSummary {
+  totalSites: number
+  successfulScans: number
+  failedScans: number
+  totalIssuesFound: number
+  totalNewIssues: number
+  totalResolvedIssues: number
+  criticalIssuesDelta: number
+  seriousIssuesDelta: number
+  moderateIssuesDelta: number
+  minorIssuesDelta: number
+  siteResults: Array<{
+    name: string
+    url: string
+    status: 'success' | 'failure'
+    issuesCount?: number
+    error?: string
+    retries: number
+  }>
+}
 
 // Maximum retries per site scan
 const MAX_RETRIES = 2
@@ -64,53 +106,6 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   const error = 'Missing SUPABASE_SERVICE_ROLE_KEY environment variable'
   logError(error)
   process.exit(1)
-}
-
-interface ScanIssue {
-  rule: string
-  impact: ImpactValue
-  description: string
-  helpUrl: string
-  selector: string
-  html: string
-}
-
-interface ScanResult {
-  id: string
-  score: number
-  issues: ScanIssue[]
-  trends?: {
-    changeInScore: number
-    newIssuesCount: number
-    resolvedIssuesCount: number
-    criticalIssuesDelta: number
-    seriousIssuesDelta: number
-    moderateIssuesDelta: number
-    minorIssuesDelta: number
-  }
-}
-
-interface MonitoringSummary {
-  totalSites: number
-  successfulScans: number
-  failedScans: number
-  totalIssuesFound: number
-  averageScore: number
-  totalNewIssues: number
-  totalResolvedIssues: number
-  criticalIssuesDelta: number
-  seriousIssuesDelta: number
-  moderateIssuesDelta: number
-  minorIssuesDelta: number
-  siteResults: Array<{
-    name: string
-    url: string
-    status: 'success' | 'failure'
-    score?: number
-    issuesCount?: number
-    error?: string
-    retries?: number
-  }>
 }
 
 // Helper function to get a unique key for issue comparison
@@ -175,7 +170,6 @@ async function calculateScanTrends(
     .from('scans')
     .select(`
       id,
-      score,
       issues (
         id,
         rule,
@@ -199,9 +193,8 @@ async function calculateScanTrends(
   }
 
   // If no previous scan, all issues are new
-  if (!previousScans || previousScans.length === 0 || !previousScans[0].score) {
+  if (!previousScans || previousScans.length === 0) {
     return {
-      changeInScore: currentScan.score,
       newIssuesCount: currentScan.issues.length,
       resolvedIssuesCount: 0,
       criticalIssuesDelta: currentScan.issues.filter(i => i.impact === 'critical').length,
@@ -241,7 +234,6 @@ async function calculateScanTrends(
   const minorDelta = countBySeverity(newIssues, 'minor') - countBySeverity(resolvedIssues, 'minor')
 
   return {
-    changeInScore: currentScan.score - (previousScan.score || 0),
     newIssuesCount: newIssues.length,
     resolvedIssuesCount: resolvedIssues.length,
     criticalIssuesDelta: criticalDelta,
@@ -277,7 +269,7 @@ async function scanSite(
     // Run the accessibility scan
     devLog(`📊 Running scan for ${site.url}...`)
     const scanResult = await runA11yScan(site.url)
-    devLog(`✅ Scan completed with score: ${scanResult.score}/100`)
+    devLog(`✅ Scan completed with ${scanResult.totalViolations} violations`)
 
     // Map scan issues to database format with proper type conversion
     const issues: IssueInsert[] = scanResult.issues.map(issue => {
@@ -311,7 +303,6 @@ async function scanSite(
       .from('scans')
       .update({
         status: 'completed',
-        score: scanResult.score,
         finished_at: new Date().toISOString()
       } satisfies Partial<ScanInsert>)
       .eq('id', scan.id)
@@ -322,8 +313,7 @@ async function scanSite(
 
     // Calculate and save trends
     const trends = await calculateScanTrends(supabase, { 
-      id: scan.id, 
-      score: scanResult.score, 
+      id: scan.id,
       issues: scanResult.issues
     }, site.id)
 
@@ -333,7 +323,6 @@ async function scanSite(
       .insert({
         scan_id: scan.id,
         site_id: site.id,
-        score_change: trends.changeInScore,
         new_issues_count: trends.newIssuesCount,
         resolved_issues_count: trends.resolvedIssuesCount,
         critical_issues_delta: trends.criticalIssuesDelta,
@@ -347,10 +336,9 @@ async function scanSite(
     }
 
     return { 
-      id: scan.id, 
-      score: scanResult.score, 
+      id: scan.id,
       issues: scanResult.issues,
-      trends 
+      trends
     }
   } catch (error) {
     // Update scan record as failed
@@ -393,7 +381,6 @@ async function runMonitoring(): Promise<MonitoringSummary> {
     successfulScans: 0,
     failedScans: 0,
     totalIssuesFound: 0,
-    averageScore: 0,
     totalNewIssues: 0,
     totalResolvedIssues: 0,
     criticalIssuesDelta: 0,
@@ -433,22 +420,17 @@ async function runMonitoring(): Promise<MonitoringSummary> {
     if (success && result) {
       summary.successfulScans++
       summary.totalIssuesFound += result.issues.length
-      summary.averageScore += result.score
-
-      if (result.trends) {
-        summary.totalNewIssues += result.trends.newIssuesCount
-        summary.totalResolvedIssues += result.trends.resolvedIssuesCount
-        summary.criticalIssuesDelta += result.trends.criticalIssuesDelta
-        summary.seriousIssuesDelta += result.trends.seriousIssuesDelta
-        summary.moderateIssuesDelta += result.trends.moderateIssuesDelta
-        summary.minorIssuesDelta += result.trends.minorIssuesDelta
-      }
+      summary.totalNewIssues += result.trends?.newIssuesCount || 0
+      summary.totalResolvedIssues += result.trends?.resolvedIssuesCount || 0
+      summary.criticalIssuesDelta += result.trends?.criticalIssuesDelta || 0
+      summary.seriousIssuesDelta += result.trends?.seriousIssuesDelta || 0
+      summary.moderateIssuesDelta += result.trends?.moderateIssuesDelta || 0
+      summary.minorIssuesDelta += result.trends?.minorIssuesDelta || 0
 
       summary.siteResults.push({
         name: site.name || site.url,
         url: site.url,
         status: 'success',
-        score: result.score,
         issuesCount: result.issues.length,
         retries: retryCount
       })
@@ -469,24 +451,20 @@ async function runMonitoring(): Promise<MonitoringSummary> {
     }
   }
 
-  // Calculate final averages
-  if (summary.successfulScans > 0) {
-    summary.averageScore = summary.averageScore / summary.successfulScans
-  }
-
   const endTime = new Date()
   const duration = (endTime.getTime() - startTime.getTime()) / 1000
 
-  // Save monitoring summary
+  // Log summary to database
   const { error: summaryError } = await supabase
     .from('monitoring_summary_logs')
     .insert({
       sites_monitored: summary.totalSites,
       successful_scans: summary.successfulScans,
       failed_scans: summary.failedScans,
-      average_score: summary.averageScore,
       total_violations: summary.totalIssuesFound,
-      execution_time_seconds: Math.round(duration)
+      execution_time_seconds: Math.round(duration),
+      created_at: startTime.toISOString(),
+      average_score: summary.totalSites > 0 ? (summary.totalIssuesFound / summary.totalSites) : 0 // or calculate properly
     })
 
   if (summaryError) {
@@ -494,37 +472,24 @@ async function runMonitoring(): Promise<MonitoringSummary> {
   }
 
   // Log final summary
-  const summaryLog = [
-    `\n📊 Monitoring Summary (${format(startTime, 'PPpp')} - ${format(endTime, 'PPpp')})`,
-    `Duration: ${Math.round(duration)} seconds`,
+  const summaryLines = [
+    `\n📊 Monitoring Summary (${format(startTime, 'PPpp')})`,
+    '=====================================',
     `Total Sites: ${summary.totalSites}`,
     `Successful Scans: ${summary.successfulScans}`,
     `Failed Scans: ${summary.failedScans}`,
-    `Average Score: ${summary.averageScore.toFixed(2)}/100`,
     `Total Issues Found: ${summary.totalIssuesFound}`,
     `New Issues: ${summary.totalNewIssues}`,
     `Resolved Issues: ${summary.totalResolvedIssues}`,
-    `\nIssue Severity Changes:`,
-    `Critical: ${summary.criticalIssuesDelta > 0 ? '+' : ''}${summary.criticalIssuesDelta}`,
-    `Serious: ${summary.seriousIssuesDelta > 0 ? '+' : ''}${summary.seriousIssuesDelta}`,
-    `Moderate: ${summary.moderateIssuesDelta > 0 ? '+' : ''}${summary.moderateIssuesDelta}`,
-    `Minor: ${summary.minorIssuesDelta > 0 ? '+' : ''}${summary.minorIssuesDelta}`,
-    `\nSite Results:`,
-    ...summary.siteResults.map(result => {
-      if (result.status === 'success') {
-        return `✅ ${result.name}: Score ${result.score}/100 (${result.issuesCount} issues)${
-          result.retries ? ` [${result.retries} retries]` : ''
-        }`
-      } else {
-        return `❌ ${result.name}: Failed - ${result.error}${
-          result.retries ? ` [${result.retries} retries]` : ''
-        }`
-      }
-    })
+    `Critical Issues Delta: ${summary.criticalIssuesDelta}`,
+    `Serious Issues Delta: ${summary.seriousIssuesDelta}`,
+    `Moderate Issues Delta: ${summary.moderateIssuesDelta}`,
+    `Minor Issues Delta: ${summary.minorIssuesDelta}`,
+    `Total Execution Time: ${Math.round(duration)}s`,
+    ''
   ].join('\n')
 
-  // Always log the summary, even in cron mode
-  console.log(summaryLog)
+  devLog(summaryLines)
 
   return summary
 }
