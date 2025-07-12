@@ -47,9 +47,7 @@ jobs:
         run: npm run build
 
       - name: Start server
-        env:
-          HOST: "0.0.0.0"
-        run: npm start &
+        run: HOST=0.0.0.0 npm start &
       - name: Wait for server to be ready
         run: |
           n=0
