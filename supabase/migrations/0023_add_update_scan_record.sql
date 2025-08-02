@@ -1,3 +1,6 @@
+-- Drop existing function if it exists
+DROP FUNCTION IF EXISTS public.update_scan_record;
+
 -- Create or replace the update_scan_record function
 CREATE OR REPLACE FUNCTION public.update_scan_record(
   p_scan_id uuid,
