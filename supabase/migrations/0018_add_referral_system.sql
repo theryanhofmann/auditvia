@@ -24,8 +24,8 @@ CREATE POLICY "Users can read their own referral data"
     (auth.uid())::uuid = id OR 
     EXISTS (
       SELECT 1 FROM users u2 
-      WHERE u2.id = auth.uid()::uuid 
-      AND u2.referred_by = users.referral_code
+      WHERE u2.id = (auth.uid())::uuid 
+      AND u2.referred_by::text = users.referral_code::text
     )
   );
 
@@ -45,10 +45,10 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Only increment if under the cap and referral exists
   IF NEW.referred_by IS NOT NULL AND 
-     (SELECT referral_credits FROM users WHERE referral_code = NEW.referred_by) < 10 THEN
+     (SELECT referral_credits FROM users WHERE referral_code::text = NEW.referred_by::text) < 10 THEN
     UPDATE users 
     SET referral_credits = referral_credits + 1 
-    WHERE referral_code = NEW.referred_by;
+    WHERE referral_code::text = NEW.referred_by::text;
   END IF;
   RETURN NEW;
 END;
