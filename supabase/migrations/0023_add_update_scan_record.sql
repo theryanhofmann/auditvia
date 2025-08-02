@@ -1,5 +1,6 @@
 -- Drop existing function if it exists
-DROP FUNCTION IF EXISTS public.update_scan_record;
+DROP FUNCTION IF EXISTS public.update_scan_record(uuid, text, timestamptz, integer, integer, integer, integer, integer);
+DROP FUNCTION IF EXISTS public.update_scan_record(uuid, integer, integer, integer, integer, integer, text, timestamptz);
 
 -- Create or replace the update_scan_record function
 CREATE OR REPLACE FUNCTION public.update_scan_record(
@@ -32,7 +33,7 @@ END;
 $$;
 
 -- Grant execute permission to authenticated users
-GRANT EXECUTE ON FUNCTION public.update_scan_record TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_scan_record(uuid, integer, integer, integer, integer, integer, text, timestamptz) TO authenticated;
 
 -- Ensure monitoring column has a default value and backfill nulls
 ALTER TABLE public.sites 
@@ -40,4 +41,4 @@ ALTER TABLE public.sites
 
 UPDATE public.sites 
 SET monitoring = false 
-WHERE monitoring IS NULL; 
+WHERE monitoring IS NULL;
