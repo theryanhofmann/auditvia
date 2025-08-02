@@ -1,9 +1,22 @@
--- Add monitoring fields to sites table
-ALTER TABLE sites
-ADD COLUMN monitoring_enabled BOOLEAN DEFAULT false,
-ADD COLUMN monitoring_frequency TEXT DEFAULT 'daily' CHECK (monitoring_frequency IN ('daily', 'weekly', 'monthly')),
-ADD COLUMN last_monitored_at TIMESTAMPTZ,
-ADD COLUMN next_monitoring_at TIMESTAMPTZ;
+-- Add monitoring fields to sites table if they don't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sites' AND column_name = 'monitoring_enabled') THEN
+    ALTER TABLE sites ADD COLUMN monitoring_enabled BOOLEAN DEFAULT false;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sites' AND column_name = 'monitoring_frequency') THEN
+    ALTER TABLE sites ADD COLUMN monitoring_frequency TEXT DEFAULT 'daily' CHECK (monitoring_frequency IN ('daily', 'weekly', 'monthly'));
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sites' AND column_name = 'last_monitored_at') THEN
+    ALTER TABLE sites ADD COLUMN last_monitored_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sites' AND column_name = 'next_monitoring_at') THEN
+    ALTER TABLE sites ADD COLUMN next_monitoring_at TIMESTAMPTZ;
+  END IF;
+END $$;
 
 -- Function to calculate next monitoring time
 CREATE OR REPLACE FUNCTION calculate_next_monitoring_time(
@@ -58,6 +71,9 @@ BEGIN
 END;
 $$;
 
+-- Drop existing trigger if it exists
+DROP TRIGGER IF EXISTS update_site_monitoring_schedule ON sites;
+
 -- Trigger to automatically update next_monitoring_at
 CREATE OR REPLACE FUNCTION update_monitoring_schedule_trigger()
 RETURNS TRIGGER
@@ -82,4 +98,4 @@ CREATE TRIGGER update_site_monitoring_schedule
 -- Grant execute permissions
 GRANT EXECUTE ON FUNCTION calculate_next_monitoring_time TO authenticated;
 GRANT EXECUTE ON FUNCTION update_monitoring_schedule TO authenticated;
-GRANT EXECUTE ON FUNCTION get_sites_due_for_monitoring TO service_role; 
+GRANT EXECUTE ON FUNCTION get_sites_due_for_monitoring TO service_role;
