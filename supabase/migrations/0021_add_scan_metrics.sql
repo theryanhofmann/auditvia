@@ -17,6 +17,9 @@ ALTER TABLE scans
 ALTER TABLE scan_trends
   DROP COLUMN IF EXISTS score_change;
 
+-- Drop existing function if it exists
+DROP FUNCTION IF EXISTS update_scan_record(UUID, TEXT, TIMESTAMPTZ, INTEGER, INTEGER, INTEGER, INTEGER, INTEGER);
+
 -- Create function to update scan record
 CREATE OR REPLACE FUNCTION update_scan_record(
   p_scan_id UUID,
@@ -43,7 +46,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant execute permission to authenticated users
-GRANT EXECUTE ON FUNCTION update_scan_record TO authenticated;
+GRANT EXECUTE ON FUNCTION update_scan_record(UUID, TEXT, TIMESTAMPTZ, INTEGER, INTEGER, INTEGER, INTEGER, INTEGER) TO authenticated;
 
 -- Recreate the scan_summaries view without score
 CREATE OR REPLACE VIEW scan_summaries AS
@@ -71,32 +74,51 @@ SELECT
 FROM scan_trends st
 ORDER BY st.created_at DESC;
 
--- Create RLS policies
-CREATE POLICY "Users can view their own scans" ON scans
+-- Drop existing policies
+DROP POLICY IF EXISTS "Users can view their own scans" ON scans;
+DROP POLICY IF EXISTS "Users can create scans for their sites" ON scans;
+DROP POLICY IF EXISTS "Users can update their own scans" ON scans;
+
+-- Create RLS policies with team-based access
+CREATE POLICY "Team members can view scans" ON scans
   FOR SELECT
   USING (
-    site_id IN (
-      SELECT id FROM sites WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM sites s
+      INNER JOIN team_members tm ON tm.team_id = s.team_id
+      WHERE s.id = scans.site_id
+      AND tm.user_id = auth.uid()::uuid
     )
   );
 
-CREATE POLICY "Users can create scans for their sites" ON scans
+CREATE POLICY "Team members can create scans" ON scans
   FOR INSERT
   WITH CHECK (
-    site_id IN (
-      SELECT id FROM sites WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM sites s
+      INNER JOIN team_members tm ON tm.team_id = s.team_id
+      WHERE s.id = NEW.site_id
+      AND tm.user_id = auth.uid()::uuid
     )
   );
 
-CREATE POLICY "Users can update their own scans" ON scans
+CREATE POLICY "Team admins can update scans" ON scans
   FOR UPDATE
   USING (
-    site_id IN (
-      SELECT id FROM sites WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM sites s
+      INNER JOIN team_members tm ON tm.team_id = s.team_id
+      WHERE s.id = scans.site_id
+      AND tm.user_id = auth.uid()::uuid
+      AND tm.role IN ('owner', 'admin')
     )
   )
   WITH CHECK (
-    site_id IN (
-      SELECT id FROM sites WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM sites s
+      INNER JOIN team_members tm ON tm.team_id = s.team_id
+      WHERE s.id = NEW.site_id
+      AND tm.user_id = auth.uid()::uuid
+      AND tm.role IN ('owner', 'admin')
     )
-  ); 
+  );
