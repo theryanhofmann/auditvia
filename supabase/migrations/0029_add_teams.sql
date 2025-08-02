@@ -1,11 +1,21 @@
--- Create team role enum type
-CREATE TYPE team_role AS ENUM ('owner', 'admin', 'member');
+-- Create team role enum type if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'team_role') THEN
+    CREATE TYPE team_role AS ENUM ('owner', 'admin', 'member');
+  END IF;
+END $$;
 
--- Create invite status enum type
-CREATE TYPE invite_status AS ENUM ('pending', 'accepted', 'revoked');
+-- Create invite status enum type if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invite_status') THEN
+    CREATE TYPE invite_status AS ENUM ('pending', 'accepted', 'revoked');
+  END IF;
+END $$;
 
--- Create teams table
-CREATE TABLE teams (
+-- Create teams table if it doesn't exist
+CREATE TABLE IF NOT EXISTS teams (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -13,8 +23,8 @@ CREATE TABLE teams (
   CONSTRAINT teams_name_length CHECK (char_length(name) >= 1 AND char_length(name) <= 50)
 );
 
--- Create team_members table
-CREATE TABLE team_members (
+-- Create team_members table if it doesn't exist
+CREATE TABLE IF NOT EXISTS team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -23,8 +33,8 @@ CREATE TABLE team_members (
   UNIQUE(team_id, user_id)
 );
 
--- Create team_invites table
-CREATE TABLE team_invites (
+-- Create team_invites table if it doesn't exist
+CREATE TABLE IF NOT EXISTS team_invites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -65,6 +75,19 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop existing policies
+DROP POLICY IF EXISTS "Team members can view their teams" ON teams;
+DROP POLICY IF EXISTS "Users can create teams" ON teams;
+DROP POLICY IF EXISTS "Team owners/admins can update team details" ON teams;
+DROP POLICY IF EXISTS "Team owners can delete teams" ON teams;
+DROP POLICY IF EXISTS "Team members can view other team members" ON team_members;
+DROP POLICY IF EXISTS "Team owners/admins can add members" ON team_members;
+DROP POLICY IF EXISTS "Team owners/admins can update member roles" ON team_members;
+DROP POLICY IF EXISTS "Team owners can remove members" ON team_members;
+DROP POLICY IF EXISTS "Team members can view invites" ON team_invites;
+DROP POLICY IF EXISTS "Team owners/admins can create invites" ON team_invites;
+DROP POLICY IF EXISTS "Team owners/admins can update invite status" ON team_invites;
 
 -- Teams table policies
 CREATE POLICY "Team members can view their teams"
@@ -149,14 +172,31 @@ CREATE POLICY "Team owners/admins can update invite status"
   ON team_invites FOR UPDATE
   USING (is_team_admin(team_id, auth.uid()));
 
--- Create indexes for performance
-CREATE INDEX team_members_team_id_idx ON team_members(team_id);
-CREATE INDEX team_members_user_id_idx ON team_members(user_id);
-CREATE INDEX team_invites_team_id_idx ON team_invites(team_id);
-CREATE INDEX team_invites_email_idx ON team_invites(email);
-CREATE INDEX team_invites_token_idx ON team_invites(token);
+-- Create indexes for performance if they don't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'team_members_team_id_idx') THEN
+    CREATE INDEX team_members_team_id_idx ON team_members(team_id);
+  END IF;
 
--- Add function to automatically add team creator as owner
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'team_members_user_id_idx') THEN
+    CREATE INDEX team_members_user_id_idx ON team_members(user_id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'team_invites_team_id_idx') THEN
+    CREATE INDEX team_invites_team_id_idx ON team_invites(team_id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'team_invites_email_idx') THEN
+    CREATE INDEX team_invites_email_idx ON team_invites(email);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'team_invites_token_idx') THEN
+    CREATE INDEX team_invites_token_idx ON team_invites(token);
+  END IF;
+END $$;
+
+-- Add function to automatically add team creator as owner if it doesn't exist
 CREATE OR REPLACE FUNCTION handle_new_team()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -166,7 +206,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Drop existing trigger if it exists
+DROP TRIGGER IF EXISTS on_team_created ON teams;
+
+-- Create trigger
 CREATE TRIGGER on_team_created
   AFTER INSERT ON teams
   FOR EACH ROW
-  EXECUTE FUNCTION handle_new_team(); 
+  EXECUTE FUNCTION handle_new_team();
