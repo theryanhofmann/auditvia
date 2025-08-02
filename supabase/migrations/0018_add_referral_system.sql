@@ -21,9 +21,9 @@ CREATE POLICY "Users can read their own referral data"
   ON users
   FOR SELECT
   USING (
-    auth.uid()::text = id::text OR 
-    auth.uid()::text IN (
-      SELECT id::text FROM users WHERE referral_code = referred_by
+    auth.uid() = id OR 
+    id IN (
+      SELECT id FROM users WHERE referral_code = referred_by
     )
   );
 
@@ -31,7 +31,7 @@ CREATE POLICY "Users can read their own referral data"
 CREATE POLICY "Users can update their own referral data"
   ON users
   FOR UPDATE
-  USING (auth.uid()::text = id::text);
+  USING (auth.uid() = id);
 
 -- Drop existing function and trigger if they exist
 DROP TRIGGER IF EXISTS on_user_referred ON users;
