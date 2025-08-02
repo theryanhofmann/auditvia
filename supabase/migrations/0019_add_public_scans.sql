@@ -10,5 +10,21 @@ CREATE POLICY "Anyone can read public scans" ON scans
 DROP POLICY IF EXISTS "Users can update their own scans" ON scans;
 CREATE POLICY "Users can update their own scans" ON scans
   FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id); 
+  USING (
+    EXISTS (
+      SELECT 1 FROM sites s
+      INNER JOIN team_members tm ON tm.team_id = s.team_id
+      WHERE s.id = scans.site_id
+      AND tm.user_id = auth.uid()::uuid
+      AND tm.role IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM sites s
+      INNER JOIN team_members tm ON tm.team_id = s.team_id
+      WHERE s.id = scans.site_id
+      AND tm.user_id = auth.uid()::uuid
+      AND tm.role IN ('owner', 'admin')
+    )
+  );
