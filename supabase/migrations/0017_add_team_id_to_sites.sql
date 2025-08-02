@@ -61,9 +61,17 @@ USING (
   )
 );
 
+-- Create default teams for users without teams
+INSERT INTO teams (name, created_by)
+SELECT 
+  COALESCE(u.name, 'My') || '''s Team' as name,
+  u.id as created_by
+FROM users u
+WHERE NOT EXISTS (
+  SELECT 1 FROM team_members tm WHERE tm.user_id = u.id
+);
+
 -- Backfill team_id for existing sites
--- This assumes each user is part of at least one team
--- and we'll use their first team as the default
 WITH user_teams AS (
   SELECT DISTINCT ON (user_id)
     user_id,
@@ -77,6 +85,9 @@ FROM user_teams ut
 WHERE s.user_id = ut.user_id
 AND s.team_id IS NULL;
 
--- Make team_id required
+-- Delete orphaned sites (those without teams)
+DELETE FROM sites WHERE team_id IS NULL;
+
+-- Now we can safely make team_id required
 ALTER TABLE sites
-ALTER COLUMN team_id SET NOT NULL; 
+ALTER COLUMN team_id SET NOT NULL;
