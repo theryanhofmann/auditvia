@@ -22,8 +22,10 @@ CREATE POLICY "Users can read their own referral data"
   FOR SELECT
   USING (
     (auth.uid())::uuid = id OR 
-    id IN (
-      SELECT id FROM users WHERE referral_code = referred_by
+    EXISTS (
+      SELECT 1 FROM users u2 
+      WHERE u2.id = auth.uid()::uuid 
+      AND u2.referred_by = users.referral_code
     )
   );
 
