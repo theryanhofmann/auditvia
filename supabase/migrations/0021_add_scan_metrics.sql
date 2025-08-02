@@ -97,7 +97,7 @@ CREATE POLICY "Team members can create scans" ON scans
     EXISTS (
       SELECT 1 FROM sites s
       INNER JOIN team_members tm ON tm.team_id = s.team_id
-      WHERE s.id = NEW.site_id
+      WHERE s.id = site_id
       AND tm.user_id = auth.uid()::uuid
     )
   );
@@ -117,7 +117,7 @@ CREATE POLICY "Team admins can update scans" ON scans
     EXISTS (
       SELECT 1 FROM sites s
       INNER JOIN team_members tm ON tm.team_id = s.team_id
-      WHERE s.id = NEW.site_id
+      WHERE s.id = site_id
       AND tm.user_id = auth.uid()::uuid
       AND tm.role IN ('owner', 'admin')
     )
