@@ -274,14 +274,15 @@ ALTER FUNCTION public.handle_new_team() OWNER TO postgres;
 
 CREATE FUNCTION public.increment_referral_credits() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
     AS $$
 BEGIN
   -- Only increment if under the cap and referral exists
   IF NEW.referred_by IS NOT NULL AND 
-     (SELECT referral_credits FROM users WHERE referral_code::text = NEW.referred_by::text) < 10 THEN
+     (SELECT referral_credits FROM users WHERE referral_code = NEW.referred_by) < 10 THEN
     UPDATE users 
     SET referral_credits = referral_credits + 1 
-    WHERE referral_code::text = NEW.referred_by::text;
+    WHERE referral_code = NEW.referred_by;
   END IF;
   RETURN NEW;
 END;
@@ -501,6 +502,25 @@ $$;
 
 
 ALTER FUNCTION public.update_updated_at_column() OWNER TO postgres;
+
+--
+-- Name: update_user_referral(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.update_user_referral(p_user_id uuid, p_referral_code uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  -- Update user's referred_by
+  UPDATE users
+  SET referred_by = p_referral_code
+  WHERE id = p_user_id;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_user_referral(p_user_id uuid, p_referral_code uuid) OWNER TO postgres;
 
 --
 -- Name: update_users_updated_at(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -877,7 +897,7 @@ CREATE TABLE public.users (
     avatar_url text,
     name text,
     email text,
-    referral_code text,
+    referral_code uuid,
     referred_by uuid,
     referral_credits integer DEFAULT 0,
     pro boolean DEFAULT false,
@@ -1324,7 +1344,7 @@ CREATE TRIGGER on_team_created AFTER INSERT ON public.teams FOR EACH ROW EXECUTE
 -- Name: users on_user_referred; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER on_user_referred AFTER INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.increment_referral_credits();
+CREATE TRIGGER on_user_referred AFTER UPDATE OF referred_by ON public.users FOR EACH ROW EXECUTE FUNCTION public.increment_referral_credits();
 
 
 --
@@ -1504,7 +1524,7 @@ ALTER TABLE ONLY public.usage_stats
 --
 
 ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES public.users(id) ON DELETE SET NULL;
+    ADD CONSTRAINT users_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES public.users(referral_code) ON DELETE SET NULL;
 
 
 --
@@ -1798,7 +1818,7 @@ CREATE POLICY "Users can read their own logs" ON public.ai_suggestions_log FOR S
 
 CREATE POLICY "Users can read their own referral data" ON public.users FOR SELECT USING (((auth.uid() = id) OR (EXISTS ( SELECT 1
    FROM public.users u2
-  WHERE ((u2.id = auth.uid()) AND ((u2.referred_by)::text = users.referral_code))))));
+  WHERE ((u2.id = auth.uid()) AND (u2.referred_by = users.referral_code))))));
 
 
 --
@@ -2122,6 +2142,15 @@ GRANT ALL ON FUNCTION public.update_team_usage_stats(team_id uuid, target_date d
 GRANT ALL ON FUNCTION public.update_updated_at_column() TO anon;
 GRANT ALL ON FUNCTION public.update_updated_at_column() TO authenticated;
 GRANT ALL ON FUNCTION public.update_updated_at_column() TO service_role;
+
+
+--
+-- Name: FUNCTION update_user_referral(p_user_id uuid, p_referral_code uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.update_user_referral(p_user_id uuid, p_referral_code uuid) TO anon;
+GRANT ALL ON FUNCTION public.update_user_referral(p_user_id uuid, p_referral_code uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.update_user_referral(p_user_id uuid, p_referral_code uuid) TO service_role;
 
 
 --
