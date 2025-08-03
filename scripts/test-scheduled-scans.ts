@@ -6,14 +6,7 @@ import dotenv from 'dotenv'
 // Load environment variables
 dotenv.config({ path: '.env.local' })
 
-interface Site {
-  id: string
-  url: string
-  name: string | null
-  custom_domain: string | null
-  user_id: string
-  monitoring: boolean
-}
+// Removed unused Site interface
 
 interface TestResult {
   siteId: string

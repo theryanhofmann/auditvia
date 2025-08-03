@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
 import { AccessibilityScanner } from '../../../../scripts/runA11yScan'
 import type { Result } from 'axe-core'
+import { sendScanCompletionEmail } from '@/app/lib/email/sendScanCompletionEmail'
+import type { Issue } from '@/app/types/email'
 
 interface AuditRequest {
   url: string
@@ -181,6 +183,62 @@ export async function POST(request: Request) {
     }
     console.log('✅ Scan record updated')
 
+    // Calculate accessibility score treating inapplicable as passes
+    const totalTests = results.passes + results.violations.length + results.incomplete + results.inapplicable
+    const successfulTests = results.passes + results.inapplicable
+    const score = totalTests > 0 ? Math.round((successfulTests / totalTests) * 100) : null
+
+    // Send completion email for Pro users
+    if (userId) {
+      try {
+        console.log('📧 Sending completion email...')
+        const { data: user } = await supabase
+          .from('users')
+          .select('id, email, name, pro')
+          .eq('github_id', userId)
+          .single()
+
+        if (user?.pro && user.email) {
+          const { data: site } = await supabase
+            .from('sites')
+            .select('*')
+            .eq('id', siteId)
+            .single()
+
+          if (site) {
+            // Get violations with messages
+            const { data: violations } = await supabase
+              .from('issues')
+              .select('*')
+              .eq('scan_id', scan.id)
+              .order('severity', { ascending: false })
+
+            await sendScanCompletionEmail({
+              user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                pro: user.pro,
+              },
+              site,
+              scan: {
+                ...scan,
+                score: score || 0,
+              },
+              violations: violations?.map(v => ({
+                ...v,
+                message: v.description || v.failure_summary || 'Unknown issue',
+              })) as Issue[] || [],
+            })
+            console.log('✅ Completion email sent')
+          }
+        }
+      } catch (error) {
+        // Log but don't fail the request
+        console.error('⚠️ Failed to send completion email:', error)
+      }
+    }
+
     // Return success response
     return NextResponse.json({
       success: true,
@@ -192,7 +250,9 @@ export async function POST(request: Request) {
           passes: results.passes,
           incomplete: results.incomplete,
           inapplicable: results.inapplicable,
-          scan_time_ms: results.timeToScan
+          scan_time_ms: results.timeToScan,
+          site_id: siteId,
+          score // Include calculated score
         }
       },
       summary: {
@@ -201,6 +261,7 @@ export async function POST(request: Request) {
         incomplete: results.incomplete,
         inapplicable: results.inapplicable,
         scan_time_ms: results.timeToScan,
+        score, // Include calculated score
         by_impact: results.violations.reduce((acc, v) => {
           const impact = v.impact || 'minor'
           acc[impact] = (acc[impact] || 0) + 1

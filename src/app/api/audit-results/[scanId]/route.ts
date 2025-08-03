@@ -121,14 +121,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .select(`
         id,
         site_id,
+        user_id,
         status,
-        created_at,
+        started_at,
         finished_at,
         total_violations,
         passes,
         incomplete,
         inapplicable,
         scan_time_ms,
+        created_at,
+        updated_at,
         sites!inner (
           id,
           url,
@@ -160,7 +163,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
     }
 
-    const typedScan = scan as ScanWithDetails
+    const typedScan: ScanWithDetails = {
+      ...scan,
+      sites: scan.sites[0]
+    }
 
     // Calculate duration and transform data
     const duration = typedScan.finished_at && typedScan.created_at

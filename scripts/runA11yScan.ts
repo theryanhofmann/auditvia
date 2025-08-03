@@ -1,5 +1,7 @@
 import { chromium, type Browser, type Page } from 'playwright'
-import type { AxeResults, Result, ImpactValue, NodeResult } from 'axe-core'
+import type { AxeResults, Result, ImpactValue } from 'axe-core'
+import * as fs from 'fs'
+import * as path from 'path'
 
 interface ScanOptions {
   url: string
@@ -104,11 +106,15 @@ export class AccessibilityScanner {
       await this.page.screenshot({ path: 'scan-verification.png' })
       console.log('📸 Screenshot saved as scan-verification.png')
 
-      // Inject axe-core from CDN
+      // Inject axe-core from local file
       console.log('💉 Injecting axe-core...')
-      await this.page.addScriptTag({
-        url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.7.2/axe.min.js'
-      })
+      const axePath = path.join(process.cwd(), 'node_modules', 'axe-core', 'axe.min.js')
+      console.log('Axe path:', axePath)
+      if (!fs.existsSync(axePath)) {
+        throw new Error(`axe.min.js not found at ${axePath}`)
+      }
+      const axeSource = fs.readFileSync(axePath, 'utf8')
+      await this.page.addScriptTag({ content: axeSource })
 
       // Wait for axe to be available and verify it's loaded
       await this.page.waitForFunction(() => {

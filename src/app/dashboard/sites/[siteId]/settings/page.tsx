@@ -9,10 +9,14 @@ interface PageProps {
   params: Promise<{
     siteId: string
   }>
+  searchParams: {
+    teamId?: string
+  }
 }
 
-export default async function SiteSettingsPage({ params }: PageProps) {
+export default async function SiteSettingsPage({ params, searchParams }: PageProps) {
   const { siteId } = await params
+  const { teamId } = searchParams
   
   // Get session for user verification
   const session = await getServerSession(authOptions)
@@ -22,21 +26,33 @@ export default async function SiteSettingsPage({ params }: PageProps) {
     redirect('/login')
   }
 
+  if (!teamId) {
+    redirect('/dashboard')
+  }
+
   const supabase = await createClient()
+
+  // Verify team membership
+  const { data: teamMember, error: teamError } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+    .single()
+
+  if (teamError || !teamMember) {
+    notFound()
+  }
 
   // Fetch site data to verify ownership and get site details
   const { data: site, error: siteError } = await supabase
     .from('sites')
-    .select('id, name, url, user_id, monitoring, custom_domain, created_at, updated_at')
+    .select('id, name, url, team_id, monitoring, custom_domain, created_at, updated_at')
     .eq('id', siteId)
+    .eq('team_id', teamId)
     .single()
 
   if (siteError || !site) {
-    notFound()
-  }
-
-  // Verify site belongs to the authenticated user
-  if (site.user_id !== userId) {
     notFound()
   }
 

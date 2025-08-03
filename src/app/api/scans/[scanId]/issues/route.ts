@@ -5,6 +5,13 @@ import { cookies } from 'next/headers'
 
 export async function GET(request: Request, { params }: { params: { scanId: string } }) {
   try {
+    const { searchParams } = new URL(request.url)
+    const teamId = searchParams.get('teamId')
+
+    if (!teamId) {
+      return NextResponse.json({ error: 'Team ID is required' }, { status: 400 })
+    }
+
     const cookieStore = await cookies()
     const supabase = createServerClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,18 +43,33 @@ export async function GET(request: Request, { params }: { params: { scanId: stri
       }
     )
 
-    const { data: scan, error: scanError } = await supabase
-      .from('scans')
-      .select('id')
-      .eq('id', params.scanId)
+    // First verify the user has access to this team
+    const { data: teamMember, error: teamError } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('team_id', teamId)
       .single()
 
-    if (scanError) {
-      return NextResponse.json({ error: scanError.message }, { status: 500 })
+    if (teamError || !teamMember) {
+      return NextResponse.json(
+        { error: 'You do not have access to this team' },
+        { status: 403 }
+      )
     }
 
-    if (!scan) {
-      return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
+    // Then verify the scan belongs to this team
+    const { data: scan, error: scanError } = await supabase
+      .from('scans')
+      .select('id, team_id')
+      .eq('id', params.scanId)
+      .eq('team_id', teamId)
+      .single()
+
+    if (scanError || !scan) {
+      return NextResponse.json(
+        { error: 'Scan not found or you do not have access' },
+        { status: 404 }
+      )
     }
 
     const { data: issues, error: issuesError } = await supabase
@@ -59,7 +81,7 @@ export async function GET(request: Request, { params }: { params: { scanId: stri
       return NextResponse.json({ error: issuesError.message }, { status: 500 })
     }
 
-    return NextResponse.json(issues)
+    return NextResponse.json({ issues })
   } catch (error) {
     console.error('Error in GET /api/scans/[scanId]/issues:', error)
     return NextResponse.json(

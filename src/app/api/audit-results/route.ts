@@ -141,14 +141,17 @@ export async function POST(request: NextRequest) {
       .select(`
         id,
         site_id,
+        user_id,
         status,
-        created_at,
+        started_at,
         finished_at,
         total_violations,
         passes,
         incomplete,
         inapplicable,
         scan_time_ms,
+        created_at,
+        updated_at,
         sites!inner (
           id,
           url,
@@ -180,7 +183,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
     }
 
-    const typedScan = scan as ScanWithDetails
+    const typedScan: ScanWithDetails = {
+      ...scan,
+      sites: scan.sites[0]
+    }
 
     return NextResponse.json({ 
       success: true,

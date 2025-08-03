@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
+import { useTeam } from '@/app/context/TeamContext'
 import { 
   Settings, 
   Save, 
@@ -10,15 +12,17 @@ import {
   Monitor,
   ArrowLeft,
   CheckCircle,
-  XCircle
+  XCircle,
+  Lock
 } from 'lucide-react'
 import Link from 'next/link'
+import { ProBadge } from '@/app/components/ui/ProBadge'
 
 interface Site {
   id: string
   name: string | null
   url: string
-  user_id: string | null
+  team_id: string
   monitoring: boolean | null
   custom_domain: string | null
   created_at: string
@@ -30,7 +34,9 @@ interface SiteSettingsClientProps {
 }
 
 export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
+  const { data: session } = useSession()
   const router = useRouter()
+  const { teamId } = useTeam()
   const [siteName, setSiteName] = useState(site.name || '')
   const [customDomain, setCustomDomain] = useState(site.custom_domain || '')
   const [monitoring, setMonitoring] = useState(site.monitoring || false)
@@ -69,6 +75,11 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
   }
 
   const handleUpdateSite = async () => {
+    if (!teamId) {
+      showToast('error', 'Please select a team first')
+      return
+    }
+
     if (!validateCustomDomain(customDomain)) {
       return
     }
@@ -76,7 +87,7 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
     try {
       setIsUpdating(true)
 
-      const response = await fetch(`/api/sites/${site.id}`, {
+      const response = await fetch(`/api/sites/${site.id}?teamId=${teamId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -84,6 +95,7 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
         body: JSON.stringify({
           name: siteName.trim() || null,
           custom_domain: customDomain.trim() || null,
+          teamId
         }),
       })
 
@@ -102,10 +114,21 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
   }
 
   const handleToggleMonitoring = async () => {
+    if (!teamId) {
+      showToast('error', 'Please select a team first')
+      return
+    }
+
+    if (!session?.user.pro) {
+      showToast('error', 'Upgrade to Pro to enable monitoring')
+      router.push('/settings')
+      return
+    }
+
     try {
       const newMonitoringState = !monitoring
 
-      const response = await fetch(`/api/sites/${site.id}/monitoring`, {
+      const response = await fetch(`/api/sites/${site.id}/monitoring?teamId=${teamId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -116,6 +139,11 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
       })
 
       if (!response.ok) {
+        if (response.status === 403) {
+          showToast('error', 'Upgrade to Pro to enable monitoring')
+          router.push('/settings')
+          return
+        }
         throw new Error('Failed to update monitoring')
       }
 
@@ -129,10 +157,15 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
   }
 
   const handleDeleteSite = async () => {
+    if (!teamId) {
+      showToast('error', 'Please select a team first')
+      return
+    }
+
     try {
       setIsDeleting(true);
 
-      const response = await fetch(`/api/sites/${site.id}`, {
+      const response = await fetch(`/api/sites/${site.id}?teamId=${teamId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -156,6 +189,21 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
 
   const hostname = new URL(site.url).hostname
   const displayDomain = site.custom_domain || hostname
+
+  // Verify team ownership
+  if (teamId !== site.team_id) {
+    return (
+      <div className="text-center py-12 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <Lock className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          Access Denied
+        </h3>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          You do not have access to this site's settings
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -284,9 +332,12 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Enable Automated Scans
-              </h3>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Enable Automated Scans
+                </h3>
+                {!session?.user.pro && <ProBadge />}
+              </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Automatically scan this site every 6 hours for accessibility issues
                 {site.custom_domain && (
@@ -295,15 +346,21 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
                   </span>
                 )}
               </p>
+              {!session?.user.pro && (
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                  Upgrade to Pro to enable automated monitoring
+                </p>
+              )}
             </div>
             
             <button
               onClick={handleToggleMonitoring}
+              disabled={!session?.user.pro}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                 monitoring
                   ? 'bg-blue-600 hover:bg-blue-700'
                   : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
+              } ${!session?.user.pro ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${

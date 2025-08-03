@@ -5,12 +5,18 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { 
   CheckCircle, 
   XCircle, 
-  Eye, 
+  Eye,
   Calendar,
   Activity,
-  AlertTriangle 
+  AlertTriangle,
+  Globe,
+  Link as LinkIcon,
+  Users
 } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
+import { useSession } from 'next-auth/react'
+import { useTeam } from '@/app/context/TeamContext'
 
 interface Scan {
   id: string
@@ -19,6 +25,8 @@ interface Scan {
   started_at: string
   finished_at: string | null
   created_at: string
+  public: boolean
+  team_id: string
 }
 
 interface ScanHistoryClientProps {
@@ -29,13 +37,22 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
   const [scans, setScans] = useState<Scan[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { data: session } = useSession()
+  const { teamId, loading: teamLoading } = useTeam()
 
   const fetchScans = useCallback(async () => {
+    if (!teamId) {
+      setScans([])
+      setError('No team selected')
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/sites/${siteId}/scans`)
+      const response = await fetch(`/api/sites/${siteId}/scans?teamId=${teamId}`)
       
       if (!response.ok) {
         throw new Error('Failed to fetch scan history')
@@ -49,7 +66,7 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
     } finally {
       setIsLoading(false)
     }
-  }, [siteId])
+  }, [siteId, teamId])
 
   useEffect(() => {
     fetchScans()
@@ -82,190 +99,130 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
     }
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'Completed'
-      case 'failed':
-        return 'Failed'
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1)
-    }
+  if (teamLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Activity className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Loading team...</span>
+      </div>
+    )
+  }
+
+  if (!teamId) {
+    return (
+      <div className="text-center py-12 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <Users className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          No Team Selected
+        </h3>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Please select a team to view scan history
+        </p>
+      </div>
+    )
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center p-8">
+        <Activity className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Loading scan history...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
-          <AlertTriangle className="w-8 h-8 text-red-600" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          Failed to load scan history
+      <div className="text-center py-12 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <AlertTriangle className="mx-auto h-12 w-12 text-red-400" />
+        <h3 className="mt-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          Error Loading Scans
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           {error}
         </p>
-        <button
-          onClick={fetchScans}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          Try Again
-        </button>
       </div>
     )
   }
 
   if (scans.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-          <Activity className="w-8 h-8 text-gray-400" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          No scans yet
+      <div className="text-center py-12 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <Globe className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          No Scans Found
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Run your first accessibility scan to see results here
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Run your first accessibility scan to get started
         </p>
-        <Link
-          href="/dashboard"
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          Back to Dashboard
-        </Link>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-          <div className="flex items-center">
-            <Activity className="w-5 h-5 text-blue-600 mr-2" />
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Scans</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-            {scans.length}
-          </div>
-        </div>
+    <div className="space-y-4">
+      {scans.map((scan) => (
+        <div
+          key={scan.id}
+          className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              {/* Status Icon */}
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getScoreBg(scan.score)}`}>
+                {getStatusIcon(scan.status)}
+              </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-          <div className="flex items-center">
-            <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Latest Score</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-            {scans[0]?.score !== null ? `${scans[0]?.score}/100` : 'N/A'}
-          </div>
-        </div>
+              {/* Scan Info */}
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h3 className={`text-lg font-semibold ${getScoreColor(scan.score)}`}>
+                    {scan.score !== null ? `${scan.score}%` : 'No Score'}
+                  </h3>
+                  {scan.public && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                      <Globe className="w-3 h-3 mr-1" />
+                      Public
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                  <Calendar className="w-4 h-4" />
+                  <time dateTime={scan.created_at}>
+                    {format(new Date(scan.created_at), 'MMM d, yyyy h:mm a')}
+                  </time>
+                  <span>•</span>
+                  <span>{formatDistanceToNow(new Date(scan.created_at))} ago</span>
+                </div>
+              </div>
+            </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-          <div className="flex items-center">
-            <Calendar className="w-5 h-5 text-purple-600 mr-2" />
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Last Scan</span>
+            {/* Actions */}
+            <div className="flex items-center space-x-2">
+              {scan.public && (
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/public/scans/${scan.id}`
+                    navigator.clipboard.writeText(url)
+                    toast.success('Public link copied to clipboard')
+                  }}
+                  className="inline-flex items-center space-x-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span>Copy Link</span>
+                </button>
+              )}
+              <Link
+                href={`/dashboard/reports/${scan.id}?teamId=${teamId}`}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                <span>View Report</span>
+              </Link>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-            {scans[0] ? formatDistanceToNow(new Date(scans[0].created_at), { addSuffix: true }) : 'Never'}
-          </div>
         </div>
-      </div>
-
-      {/* Scans Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Scan History
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Complete history of accessibility scans
-          </p>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-800">
-                <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Scan Date
-                </th>
-                <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Score
-                </th>
-                <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Duration
-                </th>
-                <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-              {scans.map((scan) => {
-                const startTime = new Date(scan.started_at)
-                const endTime = scan.finished_at ? new Date(scan.finished_at) : null
-                const duration = endTime ? Math.round((endTime.getTime() - startTime.getTime()) / 1000) : null
-
-                return (
-                  <tr key={scan.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="py-4 px-6">
-                      <div className="text-sm text-gray-900 dark:text-gray-100">
-                        {format(new Date(scan.created_at), 'MMM dd, yyyy')}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {format(new Date(scan.created_at), 'hh:mm a')} • {formatDistanceToNow(new Date(scan.created_at), { addSuffix: true })}
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreBg(scan.score)}`}>
-                        <span className={getScoreColor(scan.score)}>
-                          {scan.score !== null ? `${scan.score}/100` : 'N/A'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center">
-                        {getStatusIcon(scan.status)}
-                        <span className="ml-2 text-sm text-gray-900 dark:text-gray-100">
-                          {getStatusText(scan.status)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="text-sm text-gray-900 dark:text-gray-100">
-                        {duration ? `${duration}s` : 'N/A'}
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      {scan.status === 'completed' && (
-                        <Link
-                          href={`/dashboard/reports/${scan.id}`}
-                          className="inline-flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 transition-colors"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>View Report</span>
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      ))}
     </div>
   )
 } 

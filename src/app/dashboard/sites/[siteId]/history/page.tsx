@@ -108,5 +108,5 @@ export default async function ScanHistoryPage({ params }: RouteParams) {
     }
   })
 
-  return <ScanHistoryClient siteId={params.siteId} initialScans={processedScans} />
+  return <ScanHistoryClient siteId={params.siteId} />
 } 

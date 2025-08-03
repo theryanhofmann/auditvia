@@ -3,50 +3,55 @@
 import useSWR from 'swr'
 import { useSession } from 'next-auth/react'
 import type { Database } from '@/app/types/database'
+import { useTeam } from '@/app/context/TeamContext'
 
-type Site = Database['public']['Tables']['sites']['Row']
+type Site = Database['public']['Tables']['sites']['Row'] & {
+  scans?: Array<{
+    id: string
+    created_at: string
+    score: number | null
+    total_violations: number | null
+  }>
+}
 
 interface SitesResponse {
-  sites: any[]
+  sites: Site[]
 }
 
 const fetcher = async (url: string): Promise<Site[]> => {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error('Failed to fetch sites')
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error('Failed to fetch sites')
+    }
+    const data: SitesResponse = await response.json()
+    return data.sites || []
+  } catch (error) {
+    console.error('Error fetching sites:', error)
+    throw error
   }
-  const data: SitesResponse = await response.json()
-  
-  // Transform the API response to match the Site interface
-  return data.sites?.map(site => ({
-    id: site.id,
-    url: site.url,
-    name: site.name,
-    created_at: site.created_at,
-    updated_at: site.updated_at,
-    monitoring_enabled: site.monitoring_enabled || false,
-    monitoring: site.monitoring || null,
-    user_id: site.user_id,
-    custom_domain: site.custom_domain,
-    github_id: site.github_id
-  })) || []
 }
 
 export function useSites() {
   const { data: session } = useSession()
+  const { teamId } = useTeam()
   
-  const { data: sites, error, mutate } = useSWR<Site[]>(
-    session?.user ? '/api/sites' : null,
+  const swrKey = session?.user && teamId ? `/api/sites?teamId=${teamId}` : null
+  
+  const { data, error, mutate } = useSWR<Site[]>(
+    swrKey,
     fetcher,
     {
       refreshInterval: 30000, // Refresh every 30 seconds
       revalidateOnFocus: true,
+      suspense: false,
+      fallbackData: [],
     }
   )
 
   return {
-    sites: sites || [],
-    isLoading: !error && !sites,
+    sites: data || [],
+    isLoading: !error && !data && !!swrKey,
     isError: error,
     refresh: mutate
   }

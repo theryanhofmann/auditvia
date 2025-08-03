@@ -30,6 +30,32 @@ A sleek, modern web application that helps developers and teams audit their webs
 - **Email**: Nodemailer with SMTP support
 - **Automation**: Supabase Edge Functions with cron scheduling
 
+## Environment Variables
+
+The following environment variables are required:
+
+### Supabase
+- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+
+### App
+- `NEXT_PUBLIC_APP_URL`: The public URL of your app (e.g., `http://localhost:3000` for development)
+
+### Auth
+- `NEXTAUTH_URL`: The URL of your app (same as `NEXT_PUBLIC_APP_URL`)
+- `NEXTAUTH_SECRET`: A random string used to encrypt session data
+- `GITHUB_ID`: Your GitHub OAuth app client ID
+- `GITHUB_SECRET`: Your GitHub OAuth app client secret
+
+### Stripe
+- `STRIPE_SECRET_KEY`: Your Stripe secret key
+- `STRIPE_WEBHOOK_SECRET`: Your Stripe webhook signing secret
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`: Your Stripe publishable key
+
+### Email
+- `RESEND_API_KEY`: Your Resend API key (required for Pro user email notifications)
+
 ## Quick Start
 
 ### Prerequisites

@@ -6,598 +6,347 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          variables?: Json
-          query?: string
-          extensions?: Json
-          operationName?: string
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
+export interface Database {
   public: {
     Tables: {
-      issues: {
+      users: {
         Row: {
-          created_at: string | null
-          description: string | null
-          help_url: string | null
-          html: string | null
-          id: number
-          impact: string | null
-          rule: string
-          scan_id: string
-          selector: string
-          severity: string
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          help_url?: string | null
-          html?: string | null
-          id?: number
-          impact?: string | null
-          rule: string
-          scan_id: string
-          selector: string
-          severity: string
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          help_url?: string | null
-          html?: string | null
-          id?: number
-          impact?: string | null
-          rule?: string
-          scan_id?: string
-          selector?: string
-          severity?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "issues_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scan_summaries"
-            referencedColumns: ["scan_id"]
-          },
-          {
-            foreignKeyName: "issues_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      monitoring_logs: {
-        Row: {
-          created_at: string | null
-          error: string | null
           id: string
-          message: string
-          scan_id: string | null
-          score: number | null
-          site_id: string
-          success: boolean
-          violations: number | null
+          github_id: string
+          pro: boolean
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          error?: string | null
           id?: string
-          message: string
-          scan_id?: string | null
-          score?: number | null
-          site_id: string
-          success: boolean
-          violations?: number | null
+          github_id: string
+          pro?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          error?: string | null
           id?: string
-          message?: string
-          scan_id?: string | null
-          score?: number | null
-          site_id?: string
-          success?: boolean
-          violations?: number | null
+          github_id?: string
+          pro?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "monitoring_logs_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scan_summaries"
-            referencedColumns: ["scan_id"]
-          },
-          {
-            foreignKeyName: "monitoring_logs_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "monitoring_logs_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "monitoring_stats"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "monitoring_logs_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      monitoring_summary_logs: {
-        Row: {
-          average_score: number | null
-          created_at: string | null
-          execution_time_seconds: number | null
-          failed_scans: number
-          id: string
-          sites_monitored: number
-          successful_scans: number
-          total_violations: number | null
-        }
-        Insert: {
-          average_score?: number | null
-          created_at?: string | null
-          execution_time_seconds?: number | null
-          failed_scans?: number
-          id?: string
-          sites_monitored?: number
-          successful_scans?: number
-          total_violations?: number | null
-        }
-        Update: {
-          average_score?: number | null
-          created_at?: string | null
-          execution_time_seconds?: number | null
-          failed_scans?: number
-          id?: string
-          sites_monitored?: number
-          successful_scans?: number
-          total_violations?: number | null
-        }
-        Relationships: []
-      }
-      scan_trends: {
-        Row: {
-          created_at: string | null
-          critical_issues_delta: number
-          id: string
-          minor_issues_delta: number
-          moderate_issues_delta: number
-          new_issues_count: number
-          previous_scan_id: string | null
-          resolved_issues_count: number
-          scan_id: string
-          serious_issues_delta: number
-          site_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          critical_issues_delta?: number
-          id?: string
-          minor_issues_delta?: number
-          moderate_issues_delta?: number
-          new_issues_count?: number
-          previous_scan_id?: string | null
-          resolved_issues_count?: number
-          scan_id: string
-          serious_issues_delta?: number
-          site_id: string
-        }
-        Update: {
-          created_at?: string | null
-          critical_issues_delta?: number
-          id?: string
-          minor_issues_delta?: number
-          moderate_issues_delta?: number
-          new_issues_count?: number
-          previous_scan_id?: string | null
-          resolved_issues_count?: number
-          scan_id?: string
-          serious_issues_delta?: number
-          site_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scan_trends_previous_scan_id_fkey"
-            columns: ["previous_scan_id"]
-            isOneToOne: false
-            referencedRelation: "scan_summaries"
-            referencedColumns: ["scan_id"]
-          },
-          {
-            foreignKeyName: "scan_trends_previous_scan_id_fkey"
-            columns: ["previous_scan_id"]
-            isOneToOne: false
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_trends_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scan_summaries"
-            referencedColumns: ["scan_id"]
-          },
-          {
-            foreignKeyName: "scan_trends_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_trends_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "monitoring_stats"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "scan_trends_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      scans: {
-        Row: {
-          created_at: string | null
-          finished_at: string | null
-          id: string
-          inapplicable: number | null
-          incomplete: number | null
-          passes: number | null
-          scan_time_ms: number | null
-          site_id: string
-          started_at: string | null
-          status: string | null
-          total_violations: number | null
-        }
-        Insert: {
-          created_at?: string | null
-          finished_at?: string | null
-          id?: string
-          inapplicable?: number | null
-          incomplete?: number | null
-          passes?: number | null
-          scan_time_ms?: number | null
-          site_id: string
-          started_at?: string | null
-          status?: string | null
-          total_violations?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          finished_at?: string | null
-          id?: string
-          inapplicable?: number | null
-          incomplete?: number | null
-          passes?: number | null
-          scan_time_ms?: number | null
-          site_id?: string
-          started_at?: string | null
-          status?: string | null
-          total_violations?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scans_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "monitoring_stats"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "scans_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      scheduled_scan_logs: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          execution_time_ms: number | null
-          id: string
-          scan_id: string | null
-          scanned_url: string
-          site_id: string
-          status: string
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          execution_time_ms?: number | null
-          id?: string
-          scan_id?: string | null
-          scanned_url: string
-          site_id: string
-          status: string
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          execution_time_ms?: number | null
-          id?: string
-          scan_id?: string | null
-          scanned_url?: string
-          site_id?: string
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scheduled_scan_logs_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scan_summaries"
-            referencedColumns: ["scan_id"]
-          },
-          {
-            foreignKeyName: "scheduled_scan_logs_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduled_scan_logs_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "monitoring_stats"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "scheduled_scan_logs_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       sites: {
         Row: {
-          created_at: string | null
-          custom_domain: string | null
-          github_id: string | null
           id: string
-          monitoring: boolean | null
-          monitoring_enabled: boolean | null
+          user_id: string
+          url: string
           name: string | null
-          updated_at: string | null
-          url: string
-          user_id: string | null
+          monitoring_enabled: boolean
+          custom_domain: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          custom_domain?: string | null
-          github_id?: string | null
           id?: string
-          monitoring?: boolean | null
-          monitoring_enabled?: boolean | null
-          name?: string | null
-          updated_at?: string | null
+          user_id: string
           url: string
-          user_id?: string | null
+          name?: string | null
+          monitoring_enabled?: boolean
+          custom_domain?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          custom_domain?: string | null
-          github_id?: string | null
           id?: string
-          monitoring?: boolean | null
-          monitoring_enabled?: boolean | null
-          name?: string | null
-          updated_at?: string | null
+          user_id?: string
           url?: string
-          user_id?: string | null
+          name?: string | null
+          monitoring_enabled?: boolean
+          custom_domain?: string | null
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "sites_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
       }
-      users: {
+      scans: {
         Row: {
-          created_at: string | null
-          github_id: string
           id: string
-          updated_at: string | null
+          site_id: string
+          user_id: string
+          status: string
+          started_at: string
+          finished_at: string | null
+          total_violations: number | null
+          passes: number | null
+          incomplete: number | null
+          inapplicable: number | null
+          scan_time_ms: number | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          github_id: string
           id?: string
-          updated_at?: string | null
+          site_id: string
+          user_id: string
+          status?: string
+          started_at?: string
+          finished_at?: string | null
+          total_violations?: number | null
+          passes?: number | null
+          incomplete?: number | null
+          inapplicable?: number | null
+          scan_time_ms?: number | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          github_id?: string
           id?: string
-          updated_at?: string | null
+          site_id?: string
+          user_id?: string
+          status?: string
+          started_at?: string
+          finished_at?: string | null
+          total_violations?: number | null
+          passes?: number | null
+          incomplete?: number | null
+          inapplicable?: number | null
+          scan_time_ms?: number | null
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: []
+      }
+      issues: {
+        Row: {
+          id: number
+          scan_id: string
+          rule: string
+          selector: string
+          severity: string
+          impact: string | null
+          description: string | null
+          help_url: string | null
+          html: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          scan_id: string
+          rule: string
+          selector: string
+          severity: string
+          impact?: string | null
+          description?: string | null
+          help_url?: string | null
+          html?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          scan_id?: string
+          rule?: string
+          selector?: string
+          severity?: string
+          impact?: string | null
+          description?: string | null
+          help_url?: string | null
+          html?: string | null
+          created_at?: string
+        }
+      }
+      scan_trends: {
+        Row: {
+          id: string
+          scan_id: string
+          site_id: string
+          previous_scan_id: string | null
+          new_issues_count: number
+          resolved_issues_count: number
+          critical_issues_delta: number
+          serious_issues_delta: number
+          moderate_issues_delta: number
+          minor_issues_delta: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          scan_id: string
+          site_id: string
+          previous_scan_id?: string | null
+          new_issues_count?: number
+          resolved_issues_count?: number
+          critical_issues_delta?: number
+          serious_issues_delta?: number
+          moderate_issues_delta?: number
+          minor_issues_delta?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          scan_id?: string
+          site_id?: string
+          previous_scan_id?: string | null
+          new_issues_count?: number
+          resolved_issues_count?: number
+          critical_issues_delta?: number
+          serious_issues_delta?: number
+          moderate_issues_delta?: number
+          minor_issues_delta?: number
+          created_at?: string
+        }
+      }
+      team_invites: {
+        Row: {
+          id: string
+          team_id: string
+          email: string
+          role: 'admin' | 'member'
+          status: 'pending' | 'accepted' | 'revoked'
+          token: string
+          created_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          email: string
+          role: 'admin' | 'member'
+          status?: 'pending' | 'accepted' | 'revoked'
+          token: string
+          created_at?: string
+          expires_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          email?: string
+          role?: 'admin' | 'member'
+          status?: 'pending' | 'accepted' | 'revoked'
+          token?: string
+          created_at?: string
+          expires_at?: string
+        }
+      }
+      team_members: {
+        Row: {
+          id: string
+          team_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'member'
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'member'
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          user_id?: string
+          role?: 'owner' | 'admin' | 'member'
+          joined_at?: string
+        }
+      }
+      teams: {
+        Row: {
+          id: string
+          name: string
+          created_at: string
+          updated_at: string
+          billing_status: 'free' | 'trial' | 'pro'
+          stripe_customer_id: string | null
+          trial_ends_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_at?: string
+          updated_at?: string
+          billing_status?: 'free' | 'trial' | 'pro'
+          stripe_customer_id?: string | null
+          trial_ends_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_at?: string
+          updated_at?: string
+          billing_status?: 'free' | 'trial' | 'pro'
+          stripe_customer_id?: string | null
+          trial_ends_at?: string | null
+        }
       }
     }
     Views: {
-      monitoring_stats: {
-        Row: {
-          average_score: number | null
-          failed_runs: number | null
-          last_monitored_at: string | null
-          monitoring: boolean | null
-          site_id: string | null
-          site_name: string | null
-          successful_runs: number | null
-          total_monitoring_runs: number | null
-          total_violations: number | null
-          url: string | null
-          user_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sites_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       scan_summaries: {
         Row: {
-          created_at: string | null
-          inapplicable: number | null
-          incomplete: number | null
-          passes: number | null
-          scan_id: string | null
-          scan_time_ms: number | null
-          site_id: string | null
+          site_id: string
+          scan_id: string
+          created_at: string
           total_violations: number | null
+          passes: number | null
+          incomplete: number | null
+          inapplicable: number | null
+          scan_time_ms: number | null
         }
-        Insert: {
-          created_at?: string | null
-          inapplicable?: number | null
-          incomplete?: number | null
-          passes?: number | null
-          scan_id?: string | null
-          scan_time_ms?: number | null
-          site_id?: string | null
-          total_violations?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          inapplicable?: number | null
-          incomplete?: number | null
-          passes?: number | null
-          scan_id?: string | null
-          scan_time_ms?: number | null
-          site_id?: string | null
-          total_violations?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scans_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "monitoring_stats"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "scans_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       site_trend_stats: {
         Row: {
-          created_at: string | null
-          site_id: string | null
-          total_violations_delta: number | null
-          violations_added: number | null
-          violations_resolved: number | null
+          site_id: string
+          created_at: string
+          violations_added: number
+          violations_resolved: number
+          total_violations_delta: number
         }
-        Insert: {
-          created_at?: string | null
-          site_id?: string | null
-          total_violations_delta?: never
-          violations_added?: number | null
-          violations_resolved?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          site_id?: string | null
-          total_violations_delta?: never
-          violations_added?: number | null
-          violations_resolved?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scan_trends_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "monitoring_stats"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "scan_trends_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Functions: {
-      trigger_scheduled_monitoring: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       update_scan_record: {
         Args: {
-          p_status: string
           p_scan_id: string
+          p_total_violations: number
+          p_passes: number
           p_incomplete: number
           p_inapplicable: number
           p_scan_time_ms: number
-          p_passes: number
+          p_status: string
           p_finished_at: string
-          p_total_violations: number
         }
         Returns: undefined
+      }
+      is_team_on_trial: {
+        Args: { team_id: string }
+        Returns: boolean
+      }
+      has_team_pro_access: {
+        Args: { team_id: string }
+        Returns: boolean
       }
     }
     Enums: {
       [_ in never]: never
     }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
+}
+
+export interface User {
+  id: string
+  email: string | null
+  name: string | null
+  avatar_url: string | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  subscription_status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | null
+  subscription_period_end: string | null
+  referral_code: string
+  referred_by: string | null
+  referral_credits: number
+  created_at: string
+  updated_at: string
 }
 
 type DefaultSchema = Database[Extract<keyof Database, "public">]
@@ -688,21 +437,6 @@ export type Enums<
   ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {

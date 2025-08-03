@@ -78,6 +78,8 @@ interface MonitoringSummary {
   }>
 }
 
+type ScanTrends = NonNullable<ScanResult['trends']> & { previous_scan_id: string | null }
+
 // Maximum retries per site scan
 const MAX_RETRIES = 2
 // Delay between retries (in ms)
@@ -164,7 +166,7 @@ async function calculateScanTrends(
   supabase: ReturnType<typeof createClient<Database>>,
   currentScan: ScanResult,
   site_id: string
-): Promise<NonNullable<ScanResult['trends']>> {
+): Promise<ScanTrends> {
   // Get the previous completed scan for this site
   const { data: previousScans, error: scanError } = await supabase
     .from('scans')
@@ -200,7 +202,8 @@ async function calculateScanTrends(
       criticalIssuesDelta: currentScan.issues.filter(i => i.impact === 'critical').length,
       seriousIssuesDelta: currentScan.issues.filter(i => i.impact === 'serious').length,
       moderateIssuesDelta: currentScan.issues.filter(i => i.impact === 'moderate').length,
-      minorIssuesDelta: currentScan.issues.filter(i => i.impact === 'minor').length
+      minorIssuesDelta: currentScan.issues.filter(i => i.impact === 'minor').length,
+      previous_scan_id: null
     }
   }
 
@@ -239,7 +242,8 @@ async function calculateScanTrends(
     criticalIssuesDelta: criticalDelta,
     seriousIssuesDelta: seriousDelta,
     moderateIssuesDelta: moderateDelta,
-    minorIssuesDelta: minorDelta
+    minorIssuesDelta: minorDelta,
+    previous_scan_id: previousScan.id
   }
 }
 
@@ -255,6 +259,7 @@ async function scanSite(
     .from('scans')
     .insert({
       site_id: site.id,
+      user_id: site.user_id,
       status: 'running',
       started_at: new Date().toISOString()
     } satisfies ScanInsert)
@@ -303,7 +308,8 @@ async function scanSite(
       .from('scans')
       .update({
         status: 'completed',
-        finished_at: new Date().toISOString()
+        finished_at: new Date().toISOString(),
+        total_violations: scanResult.totalViolations
       } satisfies Partial<ScanInsert>)
       .eq('id', scan.id)
 
@@ -323,6 +329,7 @@ async function scanSite(
       .insert({
         scan_id: scan.id,
         site_id: site.id,
+        previous_scan_id: trends.previous_scan_id,
         new_issues_count: trends.newIssuesCount,
         resolved_issues_count: trends.resolvedIssuesCount,
         critical_issues_delta: trends.criticalIssuesDelta,

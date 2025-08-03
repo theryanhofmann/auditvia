@@ -9,55 +9,166 @@ import {
   Download,
   Copy,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Globe,
+  Link as LinkIcon,
+  ArrowLeftRight,
+  Users,
+  Activity
 } from 'lucide-react'
+import { ViolationCard } from '@/app/components/ui/ViolationCard'
+import { Switch } from '@/app/components/ui/switch'
+import { toast } from 'react-hot-toast'
+import { useSession } from 'next-auth/react'
+import { useTeam } from '@/app/context/TeamContext'
+import { AISuggestionsPanel } from '@/app/components/scan/AISuggestionsPanel'
+import { Badge } from '@/app/components/ui/badge'
+import { Button } from '@/app/components/ui/button'
+import { useRouter } from 'next/navigation'
 
 interface Issue {
-  id: number
+  id: string
   rule: string
-  selector: string
-  severity: 'critical' | 'serious' | 'moderate' | 'minor'
   impact: 'critical' | 'serious' | 'moderate' | 'minor'
   description: string
-  help_url: string | null
-  html: string | null
+  help_url: string
+  html: string
+  selector: string
+  instances?: Array<any>
 }
 
-interface ScanData {
+interface ViolationCardProps extends Issue {
+  expanded: boolean
+  onToggle: () => void
+}
+
+interface Scan {
   id: string
-  score: number | null
+  site_id: string
+  team_id: string
   status: string
   started_at: string
   finished_at: string | null
-  created_at: string
-  site_id: string
-  sites?: {
+  total_violations: number
+  passes: number
+  incomplete: number
+  inapplicable: number
+  public: boolean
+  issues: Issue[]
+  sites: {
     id: string
     name: string | null
     url: string
-    user_id: string | null
   }
 }
 
 interface ScanReportClientProps {
-  scanId: string
-  scan: ScanData
+  scan: Scan
 }
 
-export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
+function IssueCard({
+  id,
+  rule,
+  impact,
+  description,
+  help_url,
+  html,
+  selector,
+  instances,
+  expanded,
+  onToggle
+}: ViolationCardProps) {
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium">{rule}</h3>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={impact === 'critical' ? 'destructive' : 'secondary'}>
+            {impact}
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={onToggle}>
+            {expanded ? 'Hide Details' : 'Show Details'}
+          </Button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-4 space-y-4">
+          <div>
+            <h4 className="text-sm font-medium mb-1">Selector</h4>
+            <code className="text-sm bg-secondary/50 px-2 py-1 rounded">
+              {selector}
+            </code>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium mb-1">HTML</h4>
+            <pre className="text-sm bg-secondary/50 p-2 rounded overflow-x-auto">
+              {html}
+            </pre>
+          </div>
+          <div>
+            <a
+              href={help_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary hover:underline"
+            >
+              Learn more about this issue
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ScanReportClient({ scan }: ScanReportClientProps) {
+  const { data: session } = useSession()
+  const { teamId, loading: teamLoading } = useTeam()
+  const [isPublic, setIsPublic] = useState(scan.public)
+  const [isUpdating, setIsUpdating] = useState(false)
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set())
+  const [expandedIssues, setExpandedIssues] = useState<string[]>([])
+  const [previousScan, setPreviousScan] = useState<string | null>(null)
+  const router = useRouter()
+
+  // Validate team access
+  useEffect(() => {
+    if (!teamLoading && teamId !== scan.team_id) {
+      router.push('/dashboard')
+      toast.error('You do not have access to this scan')
+    }
+  }, [teamId, scan.team_id, teamLoading, router])
+
+  // Calculate accessibility score treating inapplicable as passes
+  const calculateScore = (data: typeof scan) => {
+    const totalTests = data.passes + data.total_violations + data.incomplete + data.inapplicable
+    if (totalTests === 0) return null
+
+    // Treat inapplicable as successful tests
+    const successfulTests = data.passes + data.inapplicable
+    const score = Math.round((successfulTests / totalTests) * 100)
+    return Math.max(0, Math.min(100, score))
+  }
 
   const fetchIssues = useCallback(async () => {
+    if (!teamId) return
+
     try {
       setIsLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/scans/${scanId}/issues`)
+      const response = await fetch(`/api/scans/${scan.id}/issues?teamId=${teamId}`)
       
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('You do not have access to this scan')
+        }
         throw new Error('Failed to fetch scan issues')
       }
 
@@ -66,14 +177,41 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
     } catch (err) {
       console.error('Error fetching issues:', err)
       setError(err instanceof Error ? err.message : 'Failed to load scan issues')
+      if (err instanceof Error && err.message === 'You do not have access to this scan') {
+        router.push('/dashboard')
+      }
     } finally {
       setIsLoading(false)
     }
-  }, [scanId])
+  }, [scan.id, teamId, router])
 
   useEffect(() => {
     fetchIssues()
   }, [fetchIssues])
+
+  // Fetch previous scan
+  useEffect(() => {
+    const fetchPreviousScan = async () => {
+      if (!teamId) return
+
+      try {
+        const response = await fetch(`/api/sites/${scan.site_id}/scans?teamId=${teamId}&limit=2`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch scans')
+        }
+        const data = await response.json()
+        const scans = data.scans || []
+        // Find the previous scan (not the current one)
+        const previous = scans.find((s: { id: string }) => s.id !== scan.id)
+        if (previous) {
+          setPreviousScan(previous.id)
+        }
+      } catch (error) {
+        console.error('Error fetching previous scan:', error)
+      }
+    }
+    fetchPreviousScan()
+  }, [scan.site_id, scan.id, teamId])
 
   const getScoreColor = (score: number | null) => {
     if (score === null) return 'text-gray-500'
@@ -106,15 +244,40 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
     }
   }
 
-  const toggleIssueExpansion = (issueId: number) => {
-    const newExpanded = new Set(expandedIssues)
-    if (newExpanded.has(issueId)) {
-      newExpanded.delete(issueId)
-    } else {
-      newExpanded.add(issueId)
-    }
-    setExpandedIssues(newExpanded)
+  const toggleIssue = (id: string) => {
+    setExpandedIssues(prev =>
+      prev.includes(id)
+        ? prev.filter(i => i !== id)
+        : [...prev, id]
+    )
   }
+
+  // Group issues by impact
+  const groupedIssues = scan.issues.reduce((acc, issue) => {
+    const impact = issue.impact
+    if (!acc[impact]) {
+      acc[impact] = []
+    }
+    acc[impact].push(issue)
+    return acc
+  }, {} as Record<Issue['impact'], Issue[]>)
+
+  // Sort issues by impact severity
+  const severityOrder = {
+    critical: 0,
+    serious: 1,
+    moderate: 2,
+    minor: 3
+  } as const
+
+  type SeverityType = keyof typeof severityOrder
+
+  const sortedIssues = Object.entries(groupedIssues)
+    .sort(([a], [b]) => {
+      const aOrder = severityOrder[a as SeverityType] ?? 4
+      const bOrder = severityOrder[b as SeverityType] ?? 4
+      return aOrder - bOrder
+    }) as [Issue['impact'], Issue[]][]
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -124,9 +287,9 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
     const reportData = {
       scan: {
         id: scan.id,
-        score: scan.score,
+        score: calculateScore(scan),
         status: scan.status,
-        created_at: scan.created_at,
+        created_at: new Date().toISOString(), // Placeholder, actual created_at is not available in this scan object
         site: scan.sites
       },
       issues,
@@ -144,32 +307,91 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
     URL.revokeObjectURL(url)
   }
 
-  const groupedIssues = issues.reduce((acc, issue) => {
-    const severity = issue.severity
-    if (!acc[severity]) {
-      acc[severity] = []
+  const togglePublicAccess = async () => {
+    if (!teamId) return
+
+    try {
+      setIsUpdating(true)
+      const response = await fetch(`/api/scans/${scan.id}/public`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          public: !isPublic,
+          teamId 
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update scan visibility')
+      }
+
+      setIsPublic(!isPublic)
+      toast.success(
+        !isPublic
+          ? 'Scan report is now public'
+          : 'Scan report is now private'
+      )
+    } catch (error) {
+      console.error('Error updating scan visibility:', error)
+      toast.error('Failed to update scan visibility')
+    } finally {
+      setIsUpdating(false)
     }
-    acc[severity].push(issue)
-    return acc
-  }, {} as Record<string, Issue[]>)
+  }
+
+  const copyPublicLink = () => {
+    const publicUrl = `${window.location.origin}/public/scans/${scan.id}`
+    navigator.clipboard.writeText(publicUrl)
+    toast.success('Public link copied to clipboard')
+  }
 
   const startTime = new Date(scan.started_at)
   const endTime = scan.finished_at ? new Date(scan.finished_at) : null
   const duration = endTime ? Math.round((endTime.getTime() - startTime.getTime()) / 1000) : null
 
+  if (teamLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Activity className="w-6 h-6 animate-spin text-gray-400" />
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Loading team...</span>
+      </div>
+    )
+  }
+
+  if (!teamId) {
+    return (
+      <div className="text-center py-12 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <Users className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          No Team Selected
+        </h3>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Please select a team to view scan reports
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Scan Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Score</span>
-            <div className={`px-2 py-1 rounded-full text-sm font-medium ${getScoreBg(scan.score)}`}>
-              <span className={getScoreColor(scan.score)}>
-                {scan.score !== null ? `${scan.score}/100` : 'N/A'}
+            <div className={`px-2 py-1 rounded-full text-sm font-medium ${getScoreBg(calculateScore(scan))}`}>
+              <span className={getScoreColor(calculateScore(scan))}>
+                {calculateScore(scan) !== null ? `${calculateScore(scan)}/100` : 'N/A'}
               </span>
             </div>
           </div>
+          {scan.incomplete > 0 && (
+            <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 text-right">
+              {scan.incomplete} {scan.incomplete === 1 ? 'test was' : 'tests were'} incomplete
+            </div>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
@@ -207,19 +429,68 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
         </div>
       </div>
 
+      {/* AI Suggestions */}
+      <div className="mt-8">
+        <AISuggestionsPanel 
+          violations={scan.issues} 
+          url={scan.sites.url} 
+        />
+      </div>
+
       {/* Scan Details */}
       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Scan Details
           </h2>
-          <button
-            onClick={exportReport}
-            className="inline-flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export Report</span>
-          </button>
+          <div className="flex items-center space-x-4">
+            {/* Public Toggle */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                checked={isPublic}
+                onCheckedChange={togglePublicAccess}
+                disabled={isUpdating || !session?.user.pro}
+                aria-label="Toggle public access"
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400 flex items-center">
+                <Globe className="w-4 h-4 mr-1" />
+                Public
+              </span>
+            </div>
+
+            {/* Copy Link Button */}
+            {isPublic && (
+              <button
+                onClick={copyPublicLink}
+                className="inline-flex items-center space-x-2 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="Copy public link"
+              >
+                <LinkIcon className="w-4 h-4" />
+                <span>Copy Link</span>
+              </button>
+            )}
+
+            {/* Compare Button */}
+            {previousScan && session?.user.pro && (
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/dashboard/reports/compare/${previousScan}/${scan.id}`)}
+                className="inline-flex items-center"
+              >
+                <ArrowLeftRight className="w-4 h-4 mr-2" />
+                Compare to Previous Scan
+              </Button>
+            )}
+
+            {/* Export Button */}
+            <button
+              onClick={exportReport}
+              className="inline-flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export</span>
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -230,7 +501,7 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
           <div>
             <span className="text-gray-600 dark:text-gray-400">Created:</span>
             <span className="ml-2 text-gray-900 dark:text-gray-100">
-              {format(new Date(scan.created_at), 'MMM dd, yyyy hh:mm a')}
+              {format(new Date(scan.started_at), 'MMM dd, yyyy hh:mm a')}
             </span>
           </div>
           <div>
@@ -261,7 +532,7 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
               <div key={severity} className="text-center">
                 <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-2 ${getSeverityColor(severity)}`}>
                   <span className="text-lg font-bold">
-                    {groupedIssues[severity]?.length || 0}
+                    {groupedIssues[severity as Issue['impact']]?.length || 0}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
@@ -274,109 +545,33 @@ export function ScanReportClient({ scanId, scan }: ScanReportClientProps) {
       )}
 
       {/* Issues List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      ) : error ? (
-        <div className="text-center py-12">
-          <AlertTriangle className="w-16 h-16 mx-auto text-red-600 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-            Failed to load issues
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400">{error}</p>
-        </div>
-      ) : issues.length === 0 ? (
-        <div className="text-center py-12">
-          <CheckCircle className="w-16 h-16 mx-auto text-green-600 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-            No issues found
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            This scan found no accessibility issues. Great job!
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Accessibility Issues ({issues.length})
-            </h2>
-          </div>
-          
-          <div className="divide-y divide-gray-200 dark:divide-gray-800">
-            {issues.map((issue) => (
-              <div key={issue.id} className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getSeverityColor(issue.severity)}`}>
-                        {issue.severity}
-                      </span>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                        {issue.rule}
-                      </h3>
-                    </div>
-                    
-                    <p className="text-gray-600 dark:text-gray-400 mb-3">
-                      {issue.description}
-                    </p>
-                    
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className="text-gray-500 dark:text-gray-400">
-                        Selector: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{issue.selector}</code>
-                      </span>
-                      {issue.help_url && (
-                        <a
-                          href={issue.help_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 transition-colors"
-                        >
-                          Learn more →
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {issue.html && (
-                    <button
-                      onClick={() => toggleIssueExpansion(issue.id)}
-                      className="ml-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                      {expandedIssues.has(issue.id) ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4" />
-                      )}
-                    </button>
-                  )}
-                </div>
-                
-                {issue.html && expandedIssues.has(issue.id) && (
-                  <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        HTML Element
-                      </span>
-                      <button
-                        onClick={() => copyToClipboard(issue.html!)}
-                        className="inline-flex items-center space-x-1 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                      >
-                        <Copy className="w-3 h-3" />
-                        <span>Copy</span>
-                      </button>
-                    </div>
-                    <pre className="text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 p-3 rounded border overflow-x-auto">
-                      <code>{issue.html}</code>
-                    </pre>
-                  </div>
-                )}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold mb-6">Issues Found</h2>
+        
+        <div className="space-y-6">
+          {sortedIssues.map(([impact, issues]) => (
+            <div key={impact} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold capitalize">{impact}</h3>
+                <Badge variant={impact === 'critical' ? 'destructive' : 'secondary'}>
+                  {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
+                </Badge>
               </div>
-            ))}
-          </div>
+              
+              <div className="space-y-4">
+                {issues.map(issue => (
+                  <IssueCard
+                    key={issue.id}
+                    {...issue}
+                    expanded={expandedIssues.includes(issue.id)}
+                    onToggle={() => toggleIssue(issue.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 } 

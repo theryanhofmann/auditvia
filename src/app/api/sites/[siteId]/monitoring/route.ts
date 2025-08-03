@@ -1,115 +1,74 @@
-import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import type { Database } from '@/app/types/database'
-import { cookies } from 'next/headers'
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { createClient } from '@/app/lib/supabase/server'
+import { requirePro } from '@/app/lib/middleware/requirePro'
 
-export async function GET(request: Request, { params }: { params: { siteId: string } }) {
-  try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set(name, value, options)
-            } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          },
-          remove(name: string, options: any) {
-            try {
-              cookieStore.set(name, '', options)
-            } catch {
-              // The `remove` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          }
-        }
-      }
-    )
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { siteId: string } }
+) {
+  // Check Pro access
+  const proCheck = await requirePro(request)
+  if (proCheck) return proCheck
 
-    const { data: site, error: siteError } = await supabase
-      .from('sites')
-      .select('monitoring_enabled')
-      .eq('id', params.siteId)
-      .single()
-
-    if (siteError) {
-      return NextResponse.json({ error: siteError.message }, { status: 500 })
-    }
-
-    if (!site) {
-      return NextResponse.json({ error: 'Site not found' }, { status: 404 })
-    }
-
-    return NextResponse.json({ monitoring_enabled: site.monitoring_enabled })
-  } catch (error) {
-    console.error('Error in GET /api/sites/[siteId]/monitoring:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return new NextResponse(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401 }
     )
   }
-}
 
-export async function PATCH(request: Request, { params }: { params: { siteId: string } }) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set(name, value, options)
-            } catch {
-              // The `set` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          },
-          remove(name: string, options: any) {
-            try {
-              cookieStore.set(name, '', options)
-            } catch {
-              // The `remove` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          }
-        }
-      }
-    )
+    const { enabled } = await request.json()
 
-    const { data: site, error: updateError } = await supabase
+    const supabase = await createClient()
+
+    // Verify site ownership
+    const { data: site, error: siteError } = await supabase
       .from('sites')
-      .update({ monitoring_enabled: true })
+      .select('user_id')
       .eq('id', params.siteId)
-      .select()
       .single()
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    if (siteError || !site) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Site not found' }),
+        { status: 404 }
+      )
     }
 
-    return NextResponse.json(site)
+    if (site.user_id !== session.user.id) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 403 }
+      )
+    }
+
+    // Update monitoring status
+    const { error: updateError } = await supabase
+      .from('sites')
+      .update({ monitoring_enabled: enabled })
+      .eq('id', params.siteId)
+
+    if (updateError) {
+      console.error('Error updating monitoring:', updateError)
+      return new NextResponse(
+        JSON.stringify({ error: 'Failed to update monitoring status' }),
+        { status: 500 }
+      )
+    }
+
+    return new NextResponse(
+      JSON.stringify({ success: true, monitoring_enabled: enabled }),
+      { status: 200 }
+    )
   } catch (error) {
-    console.error('Error in PATCH /api/sites/[siteId]/monitoring:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    console.error('Error processing monitoring update:', error)
+    return new NextResponse(
+      JSON.stringify({ error: 'Invalid request' }),
+      { status: 400 }
     )
   }
 } 

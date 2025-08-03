@@ -45,6 +45,9 @@ interface ScanData {
     name: string | null
   }
   total_violations: number
+  passes: number
+  incomplete: number
+  inapplicable: number
   violations_by_impact: {
     critical: number
     serious: number
@@ -63,6 +66,17 @@ export function ScanReportClient({ scanId }: ScanReportClientProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedViolations, setExpandedViolations] = useState<Set<string>>(new Set())
+
+  // Calculate accessibility score treating inapplicable as passes
+  const calculateScore = (data: ScanData) => {
+    const totalTests = data.passes + data.total_violations + data.incomplete + data.inapplicable
+    if (totalTests === 0) return null
+
+    // Treat inapplicable as successful tests
+    const successfulTests = data.passes + data.inapplicable
+    const score = Math.round((successfulTests / totalTests) * 100)
+    return Math.max(0, Math.min(100, score))
+  }
 
   useEffect(() => {
     fetchScanReport()
@@ -279,13 +293,18 @@ export function ScanReportClient({ scanId }: ScanReportClientProps) {
         {/* Score and Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="md:col-span-1">
-            <div className={`text-center p-6 rounded-xl ${getScoreBg(scanData.score)}`}>
-              <div className={`text-4xl font-bold ${getScoreColor(scanData.score)} mb-2`}>
-                {scanData.score !== null ? `${scanData.score}` : 'N/A'}
+            <div className={`text-center p-6 rounded-xl ${getScoreBg(calculateScore(scanData))}`}>
+              <div className={`text-4xl font-bold ${getScoreColor(calculateScore(scanData))} mb-2`}>
+                {calculateScore(scanData) !== null ? `${calculateScore(scanData)}/100` : 'N/A'}
               </div>
               <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
                 Accessibility Score
               </div>
+              {scanData.incomplete > 0 && (
+                <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  {scanData.incomplete} {scanData.incomplete === 1 ? 'test was' : 'tests were'} incomplete. Results may be partial.
+                </div>
+              )}
             </div>
           </div>
 

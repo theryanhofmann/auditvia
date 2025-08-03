@@ -6,8 +6,10 @@ import { SitesTable } from './dashboard/SitesTable'
 import { AddSiteModal } from './ui/AddSiteModal'
 import { useSites } from '@/app/lib/hooks/useSites'
 import { toast } from 'sonner'
+import { useTeam } from '@/app/context/TeamContext'
 
 export function DashboardClient() {
+  const { teamId, loading: teamLoading } = useTeam()
   const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
   const { sites, isLoading, isError, refresh } = useSites()
 
@@ -24,6 +26,25 @@ export function DashboardClient() {
   const handleMonitoringToggled = useCallback(() => {
     refresh()
   }, [refresh])
+
+  if (teamLoading) {
+    return <div>Loading team...</div>
+  }
+
+  if (!teamId) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-xl font-semibold">No Team Selected</h2>
+        <p className="mt-2 text-gray-600">Please select or create a team to view your dashboard.</p>
+        <button 
+          onClick={() => {/* TODO: Open team creation */}} 
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+        >
+          Create Team
+        </button>
+      </div>
+    )
+  }
 
   if (isError) {
     return (

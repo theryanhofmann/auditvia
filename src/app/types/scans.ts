@@ -6,6 +6,10 @@ export type ScanData = {
   finished_at: string | null
   created_at: string
   site_id: string
+  total_violations: number
+  passes: number
+  incomplete: number
+  inapplicable: number
   sites: {
     id: string
     name: string | null

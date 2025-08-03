@@ -82,12 +82,14 @@ async function verifySiteOwnership(
 async function createScan(
   supabase: TypedSupabaseClient,
   siteId: string,
+  userId: string,
   status: ScanInsert['status'] = 'running'
 ): Promise<{ id: string }> {
   console.log('📝 Creating scan record:', { siteId, status })
   
   const scanData: ScanInsert = {
     site_id: siteId,
+    user_id: userId,
     status,
     started_at: new Date().toISOString(),
     finished_at: null
@@ -203,9 +205,9 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse request body
     const body = await request.json() as ScanRequestBody
-    if (!body.siteId) {
-      console.log('❌ Missing siteId in request')
-      return NextResponse.json({ error: 'siteId is required' }, { status: 400 })
+    if (!body.siteId || !body.url) {
+      console.log('❌ Missing required fields')
+      return NextResponse.json({ error: 'siteId and url are required' }, { status: 400 })
     }
 
     // 3. Initialize Supabase client
@@ -228,18 +230,37 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // 4. Get or create user
-    const user = await getOrCreateUser(supabase, session.user.id)
+    // 4. Get site and verify ownership
+    const { data: site, error: siteError } = await supabase
+      .from('sites')
+      .select('id, team_id')
+      .eq('id', body.siteId)
+      .single()
 
-    // 5. Verify site ownership
-    const site = await verifySiteOwnership(supabase, body.siteId, user.id)
+    if (siteError || !site) {
+      console.log('❌ Site not found:', siteError)
+      return NextResponse.json({ error: 'Site not found' }, { status: 404 })
+    }
+
+    // 5. Check team pro access
+    const { data: hasPro } = await supabase
+      .rpc('has_team_pro_access', { team_id: site.team_id })
+      .single()
+
+    if (!hasPro) {
+      console.log('❌ Pro subscription required')
+      return NextResponse.json(
+        { error: 'This feature requires a Pro subscription', code: 'PRO_REQUIRED' },
+        { status: 403 }
+      )
+    }
 
     // 6. Create initial scan record
-    const scan = await createScan(supabase, site.id)
+    const scan = await createScan(supabase, site.id, session.user.id)
 
     // 7. Run accessibility scan
-    console.log('🔍 Running accessibility scan for:', site.url)
-    const scanResult = await runA11yScan(body.url || site.url)
+    console.log('🔍 Running accessibility scan for:', body.url)
+    const scanResult = await runA11yScan(body.url, site.id)
     console.log('✅ Scan completed')
 
     // 8. Store issues
@@ -248,26 +269,11 @@ export async function POST(request: NextRequest) {
     // 9. Update scan status
     await updateScanStatus(supabase, scan.id, 'completed', scanResult)
 
-    // 10. Return success response
-    return NextResponse.json({
-      success: true,
-      data: {
-        scan: {
-          id: scan.id,
-          status: 'completed',
-          total_violations: scanResult.totalViolations,
-          passes: scanResult.passes,
-          incomplete: scanResult.incomplete,
-          inapplicable: scanResult.inapplicable,
-          scan_time_ms: scanResult.timeToScan
-        }
-      }
-    })
-
+    return NextResponse.json({ scanId: scan.id })
   } catch (error) {
-    console.error('❌ Scan error:', error)
+    console.error('Error in scan API:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to run scan' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
