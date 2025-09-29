@@ -69,8 +69,7 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
           incomplete,
           inapplicable,
           scan_time_ms,
-          updated_at,
-          error_message
+          updated_at
         `)
         .eq('id', params.scanId)
         .single()
@@ -258,15 +257,23 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
   if (combinedScan.status === 'failed') {
     // Fetch error message separately to avoid cache issues
     let errorMessage = null
+    // Try to fetch error message, but don't fail if column doesn't exist
     try {
-      const { data: errorData } = await supabase
+      const { data: errorData, error: errorQueryError } = await supabase
         .from('scans')
         .select('error_message')
         .eq('id', combinedScan.id)
         .single()
-      errorMessage = errorData?.error_message
+      
+      if (!errorQueryError) {
+        errorMessage = errorData?.error_message
+      } else if (errorQueryError.code === '42703') {
+        console.debug(`🔍 [report] error_message column not available in legacy schema`)
+        errorMessage = 'Scan failed - error details not available in legacy mode'
+      }
     } catch (error) {
       console.warn(`🔍 [report] Could not fetch error message for failed scan: ${combinedScan.id}`)
+      errorMessage = 'Scan failed - error details unavailable'
     }
     
     console.log(`🔍 [status=failed] Showing failure screen for scan: ${combinedScan.id}, error: ${errorMessage || 'No error message'}`)
