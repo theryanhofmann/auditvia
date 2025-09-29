@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+- Use TypeScript only, strict mode on.  
+- Never use overlays or DOM mutation patches for accessibility.  
+- Accessibility fixes must always be **code-level**.  
+- Use ESLint + Prettier (Airbnb base).  
+- Commit messages follow Conventional Commits (`fix:`, `feat:`, `chore:`).  
+- Each PR must include a checklist:
+  • Tests pass  
+  • Types clean  
+  • Accessibility baseline maintained or improved  
+  • WCAG criteria referenced

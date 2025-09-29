@@ -1,11 +1,17 @@
 import { notFound } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { createClient } from '@/app/lib/supabase/server'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { auth } from '@/auth'
+import { createClient } from '@supabase/supabase-js'
 import { ScoreCircle } from '@/app/components/ui/ScoreCircle'
 import { ViolationAccordion } from '@/app/components/ui/ViolationAccordion'
 import { UpgradeCTAClient } from './UpgradeCTAClient'
 import { MonitoringStatus } from '@/app/components/ui/MonitoringStatus'
+import { verifyScanOwnership } from '@/app/lib/ownership'
+import { ScanRunningPage } from './ScanRunningPage'
+import { ScanFailedPage } from './ScanFailedPage'
+import { SchemaErrorPage } from './SchemaErrorPage'
+import { PDFExportCard } from '@/app/components/ui/PDFExportButton'
+import { scanAnalytics } from '@/lib/safe-analytics'
+import { getSchemaCapabilities } from '@/lib/schema-capabilities'
 
 interface RouteParams {
   params: Promise<{ scanId: string }>
@@ -17,60 +23,100 @@ interface ScanWithSite {
     id: string
     name: string
     url: string
-    user_id: string
+    team_id: string
+    monitoring_enabled: boolean
   }
 }
 
 export default async function ScanReportPage({ params: paramsPromise }: RouteParams) {
   const params = await paramsPromise
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   const userId = session?.user?.id
 
   if (!userId) {
     notFound()
   }
 
-  const supabase = await createClient()
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
-  // Get scan with site details
-  const { data: scan, error: scanError } = await supabase
-    .from('scans')
-    .select(`
-      id,
-      status,
-      started_at,
-      finished_at,
-      created_at,
-      site_id,
-      total_violations,
-      passes,
-      incomplete,
-      inapplicable,
-      sites!inner (
-        id,
-        name,
-        url,
-        user_id,
-        monitoring_enabled
-      ),
-      issues (
-        id,
-        rule,
-        selector,
-        severity,
-        impact,
-        description,
-        help_url,
-        html
-      )
-    `)
-    .eq('id', params.scanId)
-    .single()
+  // Get scan with site details (robust error handling for schema issues)
+  console.log(`🔍 [report-loader start] Fetching scan: ${params.scanId} for user: ${userId}`)
+  
+  // Step 1: Get the scan with capability-aware query
+  let scan: any = null
+  let scanError: any = null
+  let isSchemaError = false
+  let isLegacyMode = false
+  
+  // Try up to 3 times with short delays to handle read-after-write race conditions
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const result = await supabase
+        .from('scans')
+        .select(`
+          id,
+          status,
+          started_at,
+          finished_at,
+          created_at,
+          site_id,
+          user_id,
+          total_violations,
+          passes,
+          incomplete,
+          inapplicable,
+          scan_time_ms,
+          updated_at,
+          error_message
+        `)
+        .eq('id', params.scanId)
+        .single()
+      
+      scan = result.data
+      scanError = result.error
+      
+      if (scan) {
+        console.log(`🔍 [query OK] Scan found on attempt ${attempt}: ${scan.id}, status: ${scan.status}`)
+        break
+      }
+      
+    } catch (error: any) {
+      console.error(`🔍 [report] Query error on attempt ${attempt}:`, error)
+      scanError = error
+    }
+    
+    // Check if this is a DB schema error (42703 = column does not exist, PGRST204 = schema cache issue)
+    if (scanError?.code === '42703' || 
+        scanError?.code === 'PGRST204' ||
+        scanError?.message?.includes('column') || 
+        scanError?.message?.includes('does not exist') ||
+        scanError?.message?.includes('schema cache')) {
+      console.error(`🔍 [schema error fatal] DB schema/cache error detected:`, {
+        code: scanError.code,
+        message: scanError.message,
+        scanId: params.scanId
+      })
+      isSchemaError = true
+      break
+    }
+    
+    if (attempt < 3) {
+      console.log(`🔍 [report] ⏳ Scan not found on attempt ${attempt}, retrying...`)
+      await new Promise(resolve => setTimeout(resolve, 200)) // 200ms delay
+    }
+  }
+
+  // Handle schema errors with clear guidance
+  if (isSchemaError) {
+    console.error(`🔍 [schema error fatal] Cannot proceed due to database schema/cache issue`)
+    return <SchemaErrorPage errorCode={scanError?.code || '42703'} />
+  }
 
   if (scanError || !scan) {
-    if (scanError && !scanError.message?.includes('JSON object requested')) {
-      console.error('Error fetching scan:', scanError)
-    }
+    console.error(`❌ [report] Scan not found after 3 attempts:`, scanError)
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
         <h1 className="text-4xl font-bold mb-4">Scan Not Found</h1>
@@ -82,38 +128,182 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
     )
   }
 
+  // Step 2: Get the site details (handle case where site_id might be null due to schema errors)
+  let site: any = null
+  let siteError: any = null
+  
+  if (scan.site_id) {
+    const result = await supabase
+      .from('sites')
+      .select('id, name, url, team_id, monitoring_enabled')
+      .eq('id', scan.site_id)
+      .single()
+    
+    site = result.data
+    siteError = result.error
+  }
+
+  if (!site && scan.status === 'running') {
+    // If we can't get site info but scan is running, create a placeholder
+    // The polling will eventually get the real data
+    console.warn(`🔍 [report] ⚠️ Site not found for running scan ${scan.id}, using placeholder`)
+    site = {
+      id: scan.site_id || 'unknown',
+      name: 'Loading...',
+      url: 'https://loading...',
+      team_id: 'unknown',
+      monitoring_enabled: false
+    }
+  } else if (siteError || !site) {
+    console.error(`❌ [report] Site not found for scan ${scan.id}:`, siteError)
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
+        <h1 className="text-4xl font-bold mb-4">Scan Not Found</h1>
+        <p className="text-xl mb-8">Site information could not be loaded for this scan.</p>
+        <a href="/dashboard" className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
+          Back to Dashboard
+        </a>
+      </div>
+    )
+  }
+
+  // Step 3: Get the issues
+  const { data: issues, error: issuesError } = await supabase
+    .from('issues')
+    .select('id, rule, selector, severity, impact, description, help_url, html')
+    .eq('scan_id', scan.id)
+
+  if (issuesError) {
+    console.warn(`⚠️ [report] Could not load issues for scan ${scan.id}:`, issuesError)
+  }
+
+  // Combine the data
+  const combinedScan = {
+    ...scan,
+    sites: [site],
+    issues: issues || []
+  }
+
+  console.log(`🔍 [report] Combined scan result:`, { 
+    scanFound: !!combinedScan, 
+    scanId: combinedScan?.id, 
+    status: combinedScan?.status,
+    siteFound: !!site,
+    teamId: site?.team_id,
+    issuesCount: combinedScan?.issues?.length || 0
+  })
+
+  // Check if we're in demo mode to show the badge
+  const isAuditDevMode = process.env.AUDIT_DEV_MODE === 'true'
+
   // Type assertion since we know the structure from our query
   const typedScan = {
-    id: scan.id,
-    sites: scan.sites[0]
+    id: combinedScan.id,
+    sites: combinedScan.sites[0]
   } as ScanWithSite
 
-  // Verify site belongs to the authenticated user
-  if (typedScan.sites?.user_id !== userId) {
-    console.warn(`User ${userId} attempted to access scan for site owned by ${typedScan.sites?.user_id}`)
+  // Verify user has access to this scan using centralized ownership helper
+  // Skip ownership check for running scans with placeholder data (will be checked on next poll)
+  if (scan.status !== 'running' || site.team_id !== 'unknown') {
+    const ownershipResult = await verifyScanOwnership(userId, params.scanId, '🔍 [report]')
+    
+    if (!ownershipResult.allowed) {
+      console.error(`❌ [report] User ${userId} attempted to access scan ${params.scanId}: ${ownershipResult.error?.message}`)
+      notFound()
+    }
+
+    console.log(`🔍 [report] ✅ Scan ownership verified - user has role: ${ownershipResult.role}`)
+  } else {
+    console.log(`🔍 [report] ⏳ Skipping ownership check for running scan with placeholder data`)
+  }
+
+  // Handle different scan statuses with explicit logging
+  console.log(`🔍 [report] Checking scan status: ${combinedScan.status}`)
+  
+  // Structured logging for report state transitions
+  const reportMetadata = {
+    scanId: combinedScan.id,
+    status: combinedScan.status,
+    siteId: combinedScan.site_id,
+    userId,
+    timestamp: new Date().toISOString()
+  }
+  // Safe analytics logging
+  scanAnalytics.reportViewed(
+    combinedScan.id, 
+    combinedScan.status, 
+    combinedScan.site_id, 
+    userId, 
+    reportMetadata
+  )
+  
+  // Handle running/queued scans
+  if (combinedScan.status === 'running' || combinedScan.status === 'queued') {
+    console.log(`🔍 [status=running] Showing progress screen for scan: ${combinedScan.id}`)
+    return (
+      <ScanRunningPage 
+        scanId={combinedScan.id} 
+        siteUrl={combinedScan.sites[0]?.url || ''} 
+        createdAt={combinedScan.created_at}
+        lastActivityAt={combinedScan.last_activity_at || combinedScan.created_at}
+        progressMessage={combinedScan.progress_message || 'Scanning in progress...'}
+        maxRuntimeMinutes={combinedScan.max_runtime_minutes || 15}
+        heartbeatIntervalSeconds={combinedScan.heartbeat_interval_seconds || 30}
+        userId={userId}
+      />
+    )
+  }
+  
+  // Handle failed scans  
+  if (combinedScan.status === 'failed') {
+    // Fetch error message separately to avoid cache issues
+    let errorMessage = null
+    try {
+      const { data: errorData } = await supabase
+        .from('scans')
+        .select('error_message')
+        .eq('id', combinedScan.id)
+        .single()
+      errorMessage = errorData?.error_message
+    } catch (error) {
+      console.warn(`🔍 [report] Could not fetch error message for failed scan: ${combinedScan.id}`)
+    }
+    
+    console.log(`🔍 [status=failed] Showing failure screen for scan: ${combinedScan.id}, error: ${errorMessage || 'No error message'}`)
+    return (
+      <ScanFailedPage 
+        scanId={combinedScan.id} 
+        siteId={combinedScan.site_id} 
+        siteUrl={combinedScan.sites[0]?.url || ''} 
+        siteName={combinedScan.sites[0]?.name}
+        errorMessage={errorMessage || undefined}
+        createdAt={combinedScan.created_at}
+      />
+    )
+  }
+
+  // Only proceed if scan is completed
+  if (combinedScan.status !== 'completed') {
+    console.error(`❌ [report] Unexpected scan status: ${combinedScan.status}`)
     notFound()
   }
 
-  // Verify scan is completed
-  if (scan.status !== 'completed') {
-    console.warn(`Attempted to view incomplete scan ${scan.id} with status ${scan.status}`)
-    notFound()
-  }
+  console.log(`🔍 [status=completed] Rendering full report for scan: ${combinedScan.id}`)
 
   // Transform scan data to match expected type
   const scanData = {
-    id: scan.id,
-    status: scan.status,
-    started_at: scan.started_at,
-    finished_at: scan.finished_at,
-    created_at: scan.created_at,
-    site_id: scan.site_id,
-    total_violations: scan.total_violations ?? 0,
-    passes: scan.passes ?? 0,
-    incomplete: scan.incomplete ?? 0,
-    inapplicable: scan.inapplicable ?? 0,
-    sites: scan.sites[0],
-    issues: scan.issues || []
+    id: combinedScan.id,
+    status: combinedScan.status,
+    started_at: combinedScan.started_at,
+    finished_at: combinedScan.finished_at,
+    created_at: combinedScan.created_at,
+    site_id: combinedScan.site_id,
+    total_violations: combinedScan.total_violations ?? 0,
+    passes: combinedScan.passes ?? 0,
+    incomplete: combinedScan.incomplete ?? 0,
+    inapplicable: combinedScan.inapplicable ?? 0,
+    sites: combinedScan.sites[0],
+    issues: combinedScan.issues || []
   }
 
   // Calculate score
@@ -122,12 +312,12 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
   const score = totalTests > 0 ? Math.round((successfulTests / totalTests) * 100) : null
 
   // Group issues by impact
-  const groupedIssues = scanData.issues.reduce((acc, issue) => {
+  const groupedIssues = scanData.issues.reduce((acc: Record<string, any[]>, issue: any) => {
     const impact = issue.impact || 'minor'
     if (!acc[impact]) acc[impact] = []
     acc[impact].push(issue)
     return acc
-  }, {} as Record<string, typeof scanData.issues>)
+  }, {} as Record<string, any[]>)
 
   // Impact color mapping
   const impactColors = {
@@ -149,9 +339,16 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
         <div className="p-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {scanData.sites.name || new URL(scanData.sites.url).hostname}
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {scanData.sites.name || new URL(scanData.sites.url).hostname}
+                </h1>
+                {isAuditDevMode && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                    Demo Data
+                  </span>
+                )}
+              </div>
               <p className="mt-2 text-gray-600 dark:text-gray-400">
                 Scan completed on {new Date(scanData.created_at).toLocaleDateString()} at {new Date(scanData.created_at).toLocaleTimeString()}
               </p>
@@ -165,6 +362,12 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
 
       {/* Upgrade CTA */}
       <UpgradeCTAClient scanId={scanData.id} />
+
+      {/* PDF Export */}
+      <PDFExportCard 
+        scanId={scanData.id} 
+        siteName={scanData.sites.name || new URL(scanData.sites.url).hostname}
+      />
 
       {/* Monitoring Status */}
       <MonitoringStatus 
@@ -247,7 +450,7 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
                     'bg-gray-500'
                   }`} />
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {impact.charAt(0).toUpperCase() + impact.slice(1)}: {issues.length}
+                    {impact.charAt(0).toUpperCase() + impact.slice(1)}: {(issues as any[]).length}
                   </span>
                 </div>
               ))}
@@ -262,7 +465,7 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
                 {impact} Issues
               </h3>
               <div className="space-y-4">
-                {issues.map(issue => (
+                {(issues as any[]).map((issue: any) => (
                   <ViolationAccordion
                     key={issue.id}
                     rule={issue.rule}
@@ -278,7 +481,7 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
           ))}
         </div>
 
-        {scanData.issues.length === 0 && (
+        {scanData.total_violations === 0 && scanData.incomplete === 0 && (
           <div className="p-12 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 mb-4">
               <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

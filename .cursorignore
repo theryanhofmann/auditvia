@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+.cache/
+.vscode/
+.DS_Store
+**/*.log
+**/*.lock
+.env
+.env.*
+public/uploads/
+tmp/
+reports/raw/

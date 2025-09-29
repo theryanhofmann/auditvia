@@ -8,7 +8,7 @@ export interface Team {
 export interface TeamContextType {
   teamId: string | null
   team: Team | null
-  setTeamId: (id: string) => void
+  setTeamId: (id: string) => Promise<void>
   loading: boolean
   error: Error | null
 }

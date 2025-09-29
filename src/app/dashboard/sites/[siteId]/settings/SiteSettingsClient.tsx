@@ -75,10 +75,7 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
   }
 
   const handleUpdateSite = async () => {
-    if (!teamId) {
-      showToast('error', 'Please select a team first')
-      return
-    }
+    // teamId validation now handled server-side
 
     if (!validateCustomDomain(customDomain)) {
       return
@@ -114,10 +111,7 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
   }
 
   const handleToggleMonitoring = async () => {
-    if (!teamId) {
-      showToast('error', 'Please select a team first')
-      return
-    }
+    // teamId validation now handled server-side
 
     if (!session?.user.pro) {
       showToast('error', 'Upgrade to Pro to enable monitoring')
@@ -157,10 +151,7 @@ export function SiteSettingsClient({ site }: SiteSettingsClientProps) {
   }
 
   const handleDeleteSite = async () => {
-    if (!teamId) {
-      showToast('error', 'Please select a team first')
-      return
-    }
+    // teamId validation now handled server-side
 
     try {
       setIsDeleting(true);

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createClient } from '@/app/lib/supabase/server'
-import { requirePro } from '@/app/lib/middleware/requirePro'
+import { auth } from '@/auth'
+import { requireProFeature } from '@/lib/pro-features'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { scanId: string } }
 ) {
-  // Check Pro access
-  const proCheck = await requirePro(request)
-  if (proCheck) return proCheck
-
-  const session = await getServerSession(authOptions)
+  console.log('📄 [pdf-export] Starting PDF export for scan:', params.scanId)
+  
+  // Verify authentication
+  const session = await auth()
   if (!session?.user?.id) {
     return new NextResponse(
       JSON.stringify({ error: 'Unauthorized' }),
@@ -22,7 +20,7 @@ export async function GET(
 
   const supabase = await createClient()
 
-  // Get scan with site details and issues
+  // Get scan with site and team details
   const { data: scan, error: scanError } = await supabase
     .from('scans')
     .select(`
@@ -38,7 +36,19 @@ export async function GET(
         id,
         name,
         url,
-        user_id
+        user_id,
+        team_id,
+        teams!inner (
+          id,
+          name,
+          created_by,
+          created_at,
+          billing_status,
+          stripe_customer_id,
+          stripe_subscription_id,
+          trial_ends_at,
+          is_pro
+        )
       ),
       issues (
         id,
@@ -55,22 +65,47 @@ export async function GET(
     .single()
 
   if (scanError || !scan) {
+    console.error('📄 [pdf-export] Scan not found:', scanError)
     return new NextResponse(
       JSON.stringify({ error: 'Scan not found' }),
       { status: 404 }
     )
   }
 
-  // Verify ownership
-  if (scan.sites[0]?.user_id !== session.user.id) {
+  // Verify ownership through team membership
+  const { data: teamMember, error: memberError } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('team_id', scan.sites[0].team_id)
+    .eq('user_id', session.user.id)
+    .single()
+
+  if (memberError || !teamMember) {
+    console.error('📄 [pdf-export] Access denied:', memberError)
     return new NextResponse(
-      JSON.stringify({ error: 'Unauthorized' }),
+      JSON.stringify({ error: 'Access denied' }),
       { status: 403 }
     )
   }
 
-  // Generate PDF report
-  // TODO: Implement actual PDF generation
+  // Check Pro feature access
+  const team = scan.sites[0].teams[0]
+  try {
+    requireProFeature(team, 'PDF_EXPORT')
+    console.log('📄 [pdf-export] Pro access verified for team:', team.name)
+  } catch (error) {
+    console.error('📄 [pdf-export] Pro feature required:', error)
+    return new NextResponse(
+      JSON.stringify({ 
+        error: 'Pro feature required',
+        message: 'PDF export requires a Pro plan. Upgrade to access this feature.',
+        feature: 'PDF_EXPORT'
+      }),
+      { status: 403 }
+    )
+  }
+
+  // Generate PDF report data
   const reportData = {
     scan: {
       id: scan.id,
@@ -81,15 +116,22 @@ export async function GET(
       passes: scan.passes,
       incomplete: scan.incomplete,
       inapplicable: scan.inapplicable,
-      site: scan.sites
+      site: scan.sites[0]
     },
     issues: scan.issues,
-    generated_at: new Date().toISOString()
+    team: {
+      name: team.name,
+      billing_status: team.billing_status
+    },
+    generated_at: new Date().toISOString(),
+    export_version: '2.0'
   }
 
-  // For now, return JSON (replace with actual PDF generation)
+  console.log(`📄 [pdf-export] ✅ Generated report for scan ${scan.id} (${scan.issues.length} issues)`)
+
+  // For now, return JSON (TODO: Implement actual PDF generation)
   return new NextResponse(
-    JSON.stringify(reportData),
+    JSON.stringify(reportData, null, 2),
     {
       headers: {
         'Content-Type': 'application/json',
@@ -97,4 +139,4 @@ export async function GET(
       }
     }
   )
-} 
+}

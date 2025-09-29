@@ -255,29 +255,35 @@ export interface Database {
         Row: {
           id: string
           name: string
+          created_by: string
           created_at: string
-          updated_at: string
           billing_status: 'free' | 'trial' | 'pro'
           stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           trial_ends_at: string | null
+          is_pro: boolean
         }
         Insert: {
           id?: string
           name: string
+          created_by: string
           created_at?: string
-          updated_at?: string
           billing_status?: 'free' | 'trial' | 'pro'
           stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           trial_ends_at?: string | null
+          // is_pro is computed, cannot be inserted
         }
         Update: {
           id?: string
           name?: string
+          created_by?: string
           created_at?: string
-          updated_at?: string
           billing_status?: 'free' | 'trial' | 'pro'
           stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           trial_ends_at?: string | null
+          // is_pro is computed, cannot be updated directly
         }
       }
     }

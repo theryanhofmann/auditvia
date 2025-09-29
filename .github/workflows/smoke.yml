@@ -1,85 +1,32 @@
-name: Smoke Test
+name: Smoke Tests
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
+    branches: [ main ]
+  push:
     branches: [ main ]
 
 jobs:
   smoke-test:
-    name: E2E Smoke Test
     runs-on: ubuntu-latest
     env:
-      DEV_NO_ADMIN: true
-      DOCKER_MODE: true
-      NODE_OPTIONS: --no-warnings
       CI: true
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Create environment file
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          echo "DEV_NO_ADMIN=true" > .env.local
-          echo "DOCKER_MODE=true" >> .env.local
-          echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> .env.local
-          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" >> .env.local
-
-      - name: Build project
-        run: npm run build
-
-      - name: Start server
-        run: HOST=0.0.0.0 npm start &
-      - name: Wait for server to be ready
-        run: |
-          n=0
-          until [ $n -ge 60 ]; do
-            if curl -sf http://0.0.0.0:3000/api/health; then
-              echo "Server is up!"
-              break
-            fi
-            n=$((n+1))
-            sleep 2
-          done
-          if [ $n -ge 60 ]; then
-            echo "Server failed to start in time"
-            exit 1
-          fi
+        run: npm ci
 
       - name: Run smoke tests
-        id: smoke-test
-        run: npm run smoke
-
-      - name: Ensure artifacts directory exists
-        if: always()
-        run: |
-          mkdir -p test-artifacts
-          echo "Test run at $(date)" > test-artifacts/test-info.txt
-          echo "Exit code: $?" >> test-artifacts/test-info.txt
-
-      - name: Upload test artifacts (if any)
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-artifacts
-          path: test-artifacts/
-          if-no-files-found: ignore
+        run: npm run smoke-test

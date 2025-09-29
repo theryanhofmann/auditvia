@@ -57,10 +57,7 @@ export function SitesTable({ sites: initialSites, onSiteDeleted, onMonitoringTog
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async (site: Site) => {
-    if (!teamId) {
-      toast.error('Please select a team first');
-      return;
-    }
+    // teamId validation now handled server-side
 
     setIsDeleting(true);
 
@@ -102,10 +99,7 @@ export function SitesTable({ sites: initialSites, onSiteDeleted, onMonitoringTog
   };
 
   const toggleMonitoring = async (siteId: string, currentValue: boolean) => {
-    if (!teamId) {
-      toast.error('Please select a team first');
-      return;
-    }
+    // teamId validation now handled server-side
 
     // Prevent multiple toggles while request is in progress
     if (togglingMonitoring[siteId]) return;
@@ -149,10 +143,7 @@ export function SitesTable({ sites: initialSites, onSiteDeleted, onMonitoringTog
   };
 
   const runAudit = async (siteId: string, customDomain?: string | null) => {
-    if (!teamId) {
-      toast.error('Please select a team first');
-      return;
-    }
+    // teamId validation now handled server-side
 
     // Find the site to get its URL
     const site = sites.find(s => s.id === siteId);

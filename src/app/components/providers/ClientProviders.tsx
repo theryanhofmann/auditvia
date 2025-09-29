@@ -5,7 +5,7 @@ import { TeamProvider } from '../../context/TeamContext'
 import { Toaster } from 'sonner'
 import { AuthErrorHandler } from './AuthErrorHandler'
 import { useSession } from 'next-auth/react'
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 import { toast } from 'sonner'
 import * as React from 'react'
 
@@ -32,7 +32,9 @@ export default function ClientProviders({
     <SessionProvider>
       <TeamProvider>
         <ReferralToast />
-        <AuthErrorHandler />
+        <Suspense fallback={null}>
+          <AuthErrorHandler />
+        </Suspense>
         {children}
         <Toaster />
       </TeamProvider>

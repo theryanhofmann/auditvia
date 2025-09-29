@@ -4,28 +4,45 @@
 
 ### Migration Naming Convention
 
-We use sequential numeric prefixes for our migrations (e.g., `0031_add_feature.sql`). This helps maintain a clear order and makes it easy to track the latest migration number.
+We use 14-digit timestamp prefixes for our migrations (e.g., `20250802T1530_add_feature.sql`). This helps maintain a clear order and prevents prefix collisions in parallel development.
 
 #### Rules:
-1. Every migration must have a unique prefix number
-2. Prefix numbers must be sequential (e.g., 0031 follows 0030)
-3. Use leading zeros to maintain consistent 4-digit format
-4. After the prefix, use descriptive names in snake_case
-5. Always include the `.sql` extension
+1. Every migration must have a unique timestamp prefix
+2. Use format: YYYYMMDDTHHmm (e.g., 20250802T1530)
+3. After the prefix, use descriptive names in snake_case
+4. Always include the `.sql` extension
+5. Never reuse a timestamp prefix, even if the migration was reverted
 
 Examples:
 ```sql
 ✅ Good:
-0031_add_user_preferences.sql
-0032_create_audit_log.sql
-0033_update_team_roles.sql
+20250802T1530_add_user_preferences.sql
+20250802T1545_create_audit_log.sql
+20250802T1600_update_team_roles.sql
 
 ❌ Bad:
-31_add_preferences.sql        # Missing leading zeros
-0031add_preferences.sql      # Missing underscore
-0031_Add_Preferences.sql     # Wrong case
-0031_add_preferences         # Missing extension
+250802T1530_add_preferences.sql   # Year must be 4 digits
+20250802_add_preferences.sql      # Missing time component
+20250802T1530add_preferences.sql  # Missing underscore
+20250802T1530_Add_Preferences.sql # Wrong case
+20250802T1530_add_preferences     # Missing extension
 ```
+
+#### Timestamp Generation:
+```bash
+# Generate a migration name with current timestamp
+echo $(date +"%Y%m%dT%H%M")_your_migration_name.sql
+
+# Example output: 20250802T1530_your_migration_name.sql
+```
+
+#### Collision Prevention:
+1. Always generate a new timestamp when creating a migration
+2. If you need to modify a migration before it's merged:
+   - Keep the original timestamp if it's a simple fix
+   - Generate a new timestamp if the changes are substantial
+3. Never reuse a timestamp from a reverted migration
+4. CI will reject any PR with duplicate timestamps
 
 ### Before Creating a Migration
 

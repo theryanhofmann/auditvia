@@ -21,7 +21,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
   const [urlError, setUrlError] = useState('')
   const [customDomainError, setCustomDomainError] = useState('')
   const { data: session, status } = useSession()
-  const { teamId } = useTeam()
+  const { teamId, loading: teamLoading } = useTeam()
 
   const validateUrl = (inputUrl: string): boolean => {
     setUrlError('')
@@ -85,11 +85,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
       return
     }
 
-    // Check team selection
-    if (!teamId) {
-      toast.error('Please select a team first')
-      return
-    }
+    // Note: teamId is now handled server-side for reliability
 
     // Validate inputs
     if (!validateUrl(url) || !validateCustomDomain(customDomain)) {
@@ -112,71 +108,109 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'same-origin', // Ensure cookies are sent
         body: JSON.stringify({
           url: url.trim(),
           name: name.trim(),
-          custom_domain: customDomain.trim() || null,
-          teamId
+          custom_domain: customDomain.trim() || null
+          // teamId derived server-side via getCurrentTeamId()
         }),
       })
 
       const responseData = await siteResponse.json()
 
       if (!siteResponse.ok) {
-        if (responseData.error === 'Site already exists') {
-          setUrlError('You have already added this site')
-          return
-        }
-
-        if (responseData.error === 'Not authenticated') {
-          toast.error('Please sign in to add a site')
+        // Handle specific status codes
+        if (siteResponse.status === 401) {
+          toast.error('Authentication error. Please sign out and sign in again.')
           signIn()
           return
+        } else if (siteResponse.status === 400) {
+          if (responseData.error === 'Site already exists') {
+            setUrlError('You have already added this site')
+            return
+          }
+          toast.error(responseData.error || 'Invalid request. Please check your input.')
+          return
+        } else if (siteResponse.status === 403) {
+          toast.error(responseData.error || 'Permission denied.')
+          return
+        } else {
+          // 500 or other errors - show the specific error message
+          toast.error(responseData.error || 'Failed to add site. Please try again.')
+          return
         }
-
-        toast.error(responseData.error || 'Failed to add site')
-        return
       }
 
       // Site was created successfully
+      console.log('Site creation successful, response data:', responseData)
       toast.success('Site added successfully! Starting initial scan...')
 
       // Step 2: Create an initial scan for the new site
       setCurrentOperation('scanning')
+      
+      // Validate we have the required data from site creation
+      if (!responseData.site?.id) {
+        console.error('Site creation response missing site.id. Full response:', responseData)
+        console.error('Expected structure: { site: { id: string, ... } }')
+        toast.success('Site added! You can run a scan manually from the dashboard.')
+        resetForm()
+        onClose()
+        onSuccess?.()
+        return
+      }
+      
       try {
+        const auditPayload = {
+          url: url.trim(),
+          siteId: responseData.site.id
+        }
+        
+        console.log('Creating initial scan with payload:', auditPayload)
+        console.log('Site created successfully with ID:', responseData.site.id)
+        
         const auditResponse = await fetch('/api/audit', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            url: url.trim(),
-            siteId: responseData.id,
-            teamId
-          }),
+          credentials: 'same-origin', // Ensure session cookies are sent
+          body: JSON.stringify(auditPayload),
         })
 
         if (auditResponse.ok) {
           const auditData = await auditResponse.json()
-          if (auditData.success) {
-            const scanId = auditData.data?.scan?.id
-            if (scanId) {
-              toast.success('Initial scan completed!')
-              window.location.href = `/dashboard/reports/${scanId}`
-            } else {
-              toast.success('Site added! Scan will begin shortly.')
-            }
+          console.log('Audit API response:', auditData)
+          
+          if (auditData.success && auditData.scanId) {
+            // Scan was created successfully, navigate to the running scan page
+            toast.success('Site added! Scan is starting...')
+            window.location.href = `/dashboard/reports/${auditData.scanId}`
+            return // Exit early to prevent form reset and modal close
           } else {
-            toast.success('Site added! Scan will begin shortly.')
+            // API returned success but no scanId
+            console.warn('Scan API returned success but no scanId:', auditData)
+            toast.success('Site added! You can run a scan manually from the dashboard.')
           }
         } else {
-          // Don't fail the whole operation if scan fails
-          console.warn('Initial scan failed, but site was created successfully')
+          // Scan API failed
+          const errorData = await auditResponse.json().catch(() => ({}))
+          console.error('Initial scan failed:', {
+            status: auditResponse.status,
+            statusText: auditResponse.statusText,
+            errorData,
+            payload: auditPayload
+          })
+          
+          if (auditResponse.status === 400) {
+            console.error('400 error - likely missing required fields. Payload was:', auditPayload)
+          }
+          
           toast.success('Site added! You can run a scan manually from the dashboard.')
         }
       } catch (scanError) {
-        // Don't fail the whole operation if scan fails
-        console.warn('Initial scan failed:', scanError)
+        // Network or other error during scan creation
+        console.error('Initial scan network error:', scanError)
         toast.success('Site added! You can manually run a scan from the dashboard.')
       }
 
@@ -309,14 +343,16 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || teamLoading}
             className={`w-full py-2 px-4 rounded-md text-white font-medium ${
-              isSubmitting
+              isSubmitting || teamLoading
                 ? 'bg-blue-400 cursor-not-allowed'
                 : 'bg-blue-500 hover:bg-blue-600'
             } transition-colors`}
           >
-            {isSubmitting
+            {teamLoading
+              ? 'Loading...'
+              : isSubmitting
               ? currentOperation === 'creating'
                 ? 'Adding Site...'
                 : 'Starting Scan...'

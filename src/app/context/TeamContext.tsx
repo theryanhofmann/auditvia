@@ -13,26 +13,27 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function initializeTeam() {
-      // Load saved teamId
-      const savedTeamId = localStorage.getItem('activeTeamId')
-      if (savedTeamId) {
-        setTeamIdState(savedTeamId)
-        setLoading(false)
-        return
-      }
-
-      // Fetch user's teams
       try {
-        const response = await fetch('/api/teams')
-        if (!response.ok) throw new Error('Failed to fetch teams')
-        const teams = await response.json()
-
-        if (teams.length > 0) {
-          const defaultTeamId = teams[0].team.id // Updated to match new response format
-          setTeamId(defaultTeamId)
+        // Get current team from server (handles cookie + auto-creation)
+        const response = await fetch('/api/teams/current')
+        if (response.ok) {
+          const data = await response.json()
+          setTeamIdState(data.teamId)
+        } else {
+          // Fallback: fetch user's teams and use first one
+          const teamsResponse = await fetch('/api/teams')
+          if (teamsResponse.ok) {
+            const teams = await teamsResponse.json()
+            if (teams.length > 0) {
+              const defaultTeamId = teams[0].team.id
+              setTeamId(defaultTeamId) // This will call setCurrentTeamId API
+            }
+          } else {
+            throw new Error('Failed to fetch teams')
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch teams'))
+        setError(err instanceof Error ? err : new Error('Failed to initialize team'))
       } finally {
         setLoading(false)
       }
@@ -52,13 +53,29 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true)
         const response = await fetch(`/api/teams/${teamId}`)
-        if (!response.ok) throw new Error('Failed to fetch team details')
+        if (!response.ok) {
+          // Handle 403 errors gracefully - user might not be a member of this team
+          if (response.status === 403) {
+            console.debug(`🏛️ [team-context] Access denied to team ${teamId} - user not a member (this is normal for report pages)`)
+            setTeam(null)
+            setError(null) // Don't treat 403 as an error
+            return
+          } else {
+            console.error(`🏛️ [team-context] Failed to fetch team details: ${response.status}`)
+            throw new Error(`Failed to fetch team details: ${response.status}`)
+          }
+        }
         
         const data = await response.json()
         setTeam(data)
         setError(null)
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch team'))
+        // Only set error for non-403 failures
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        if (!errorMessage.includes('403')) {
+          console.error(`🏛️ [team-context] Team fetch error:`, err)
+          setError(err instanceof Error ? err : new Error('Failed to fetch team'))
+        }
         setTeam(null)
       } finally {
         setLoading(false)
@@ -68,9 +85,23 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     fetchTeamDetails()
   }, [teamId])
 
-  const setTeamId = (id: string) => {
-    localStorage.setItem('activeTeamId', id)
-    setTeamIdState(id)
+  const setTeamId = async (id: string) => {
+    try {
+      // Update server-side cookie
+      await fetch('/api/teams/current', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ teamId: id }),
+      })
+      
+      // Update local state
+      setTeamIdState(id)
+    } catch (error) {
+      console.error('Error setting team ID:', error)
+      setError(error instanceof Error ? error : new Error('Failed to set team'))
+    }
   }
 
   return (

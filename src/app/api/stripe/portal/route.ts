@@ -1,16 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import Stripe from 'stripe';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { createClient } from '@/app/lib/supabase/server';
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing STRIPE_SECRET_KEY');
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16' as any, // Type assertion needed due to Stripe types being behind
-});
+import { stripeUtils } from '@/lib/stripe';
 
 export async function POST(request: Request) {
   try {
@@ -51,7 +43,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!teamMember.team.stripe_customer_id) {
+    if (!(teamMember.team as any).stripe_customer_id) {
       return NextResponse.json(
         { error: 'Team does not have a Stripe customer ID' },
         { status: 400 }
@@ -59,10 +51,10 @@ export async function POST(request: Request) {
     }
 
     // Create Stripe portal session
-    const portalSession = await stripe.billingPortal.sessions.create({
-      customer: teamMember.team.stripe_customer_id,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/teams/${teamId}/settings?billing=updated`,
-    });
+    const portalSession = await stripeUtils.createPortalSession(
+      (teamMember.team as any).stripe_customer_id,
+      `${process.env.NEXT_PUBLIC_APP_URL}/teams/${teamId}/settings?billing=updated`
+    );
 
     return NextResponse.json({ url: portalSession.url });
   } catch (error) {

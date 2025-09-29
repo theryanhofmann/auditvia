@@ -58,8 +58,11 @@ export default async function TeamSettingsPage({
 
   return (
     <TeamSettingsClient
-      team={teamMember.team}
-      members={members || []}
+      team={(teamMember.team as any)[0] || (teamMember.team as any)}
+      members={(members || []).map((member: any) => ({
+        ...member,
+        user: member.user[0] || member.user
+      }))}
       currentUserRole={teamMember.role}
     />
   )

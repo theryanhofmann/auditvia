@@ -1,129 +1,96 @@
-# Auditvia – Product Context
+Auditvia – Product Context
 
-## 🧱 Core Concept
+🧱 Core Concept
 
-Auditvia is a developer- and founder-facing SaaS that scans websites for ADA/WCAG accessibility compliance. It provides a dashboard for managing websites, running manual and automatic scans, and tracking issue history and score trends over time. Auditvia serves both technical users (devs, PMs) and non-technical users (founders, small business owners) with a dual-mode experience.
+Auditvia is an ADA/WCAG compliance SaaS for developers and founders.
+Tagline: “Installs like an overlay, fixes like an engineer.”
 
----
+It installs with the simplicity of an overlay (JS snippet or GitHub App) but delivers real remediation via pull requests and plain-language tickets. Unlike competitors, it does not mutate the DOM or fake compliance — it provides legal-defensible audits and engineer-grade fixes.
 
-## 🔍 Product Features
+Auditvia = “CodeRabbit for compliance.”
 
-* **Site Management**: Users can add, delete, and toggle monitoring for their websites.
-* **On-Demand Scans**: Triggered manually from the dashboard. Results include:
+⸻
 
-  * Accessibility score out of 100
-  * Issues grouped by severity (critical, serious, moderate, minor)
-  * WCAG references and source code snippets
-* **Automated Monitoring**:
+🔍 Product Features
 
-  * Daily cron scans for sites with `monitoring_enabled = true`
-  * Trends tracked against previous scan
-* **Dashboard Stats**:
+Current MVP
+	•	Auth + Onboarding
+	•	GitHub OAuth login.
+	•	First login creates user, default team, and team_membership in one transaction.
+	•	Redirect to /dashboard.
+	•	Dashboard
+	•	List of projects (name, URL, monitoring toggle, last scan status).
+	•	Create Project modal.
+	•	Run Audit: creates scan, runs stub (dev) or axe-core via Playwright (prod), saves summary + issues.
+	•	Monitoring toggle: persisted flag, future daily cron.
+	•	Delete Project: cascades scans + issues.
+	•	Report view: summary stats + table of issues with severity, selector, WCAG reference, and help link.
+	•	Compliance Summary for Founders
+	•	Exportable PDF reports (compliance-grade).
+	•	Plain-language summaries: “Top 3 risks.”
+	•	Badge: “Compliant as of .”
 
-  * Total issues found
-  * Sites monitored
-  * Audits completed this month
-  * Visual trend panel and frequency chart
-* **Scan History**:
+Roadmap
+	•	GitHub App integration → open pull requests with fixes.
+	•	Ticketing integrations (Jira, Trello, Linear).
+	•	Expanded compliance domains: documents, mobile apps, full platform coverage.
 
-  * View audit history per site
-  * View details of each individual scan
-* **Compliance Summary for Founders**:
+⸻
 
-  * Simplified badge (e.g., "Compliant as of July 8")
-  * Exportable PDF reports
-  * Business-friendly language (e.g., "Top 3 risks to fix")
-  * Auto-monitoring alerts
+🗃️ Database Tables
+	•	users — app users (GitHub OAuth profile).
+	•	teams — team container.
+	•	team_members — links users ↔ teams with roles.
+	•	projects — user/team-owned sites (URL, monitoring_enabled).
+	•	scans — per-project audit records with status + summary JSON.
+	•	issues — violations tied to scans (severity, selector, wcag_ref, description, help_url).
 
----
+⸻
 
-## 🗃️ Database Tables
+⚙️ Backend Notes
+	•	Scan engine: scripts/runA11yScan.ts using axe-core + Playwright.
+	•	Monitoring: scripts/monitoring.ts (stubbed now, cron later).
+	•	APIs:
+	•	/api/projects (create/delete/toggle).
+	•	/api/scans (queue/run).
+	•	/api/issues (fetch per scan).
+	•	Database: Supabase with RLS + service role for server actions.
 
-* `users`: Supabase-auth users (GitHub login)
-* `sites`: User-owned domains
-* `scans`: Per-site audit records with score, timestamp, and status
-* `issues`: WCAG violations for each scan
-* `scan_trends`: Tracks difference between last 2 scans per site
+⸻
 
----
+🧠 Market Positioning
 
-## ⚙️ Backend Notes
+Auditvia is a modern alternative to overlay vendors like Accessibe, UserWay, and AudioEye.
 
-* **Scan logic** lives in `scripts/runA11yScan.ts` using `axe-core` via Playwright
-* **Monitoring logic** lives in `scripts/monitoring.ts`
-* **Scan endpoint**: `/api/scan`
-* All database access uses Supabase with RLS and service role when necessary
+Differentiators:
+	•	Overlay-level install, but engineer-level fixes.
+	•	Transparent WCAG scanning (axe-core under the hood).
+	•	Outputs PRs + tickets, not DOM patches.
+	•	Provides legal-defensible PDF audit logs.
+	•	Balanced dual-mode UX:
+	•	Developers: selectors, code snippets, WCAG refs.
+	•	Founders: plain-language risks, compliance badge.
 
----
+Target Customers:
+	•	Developers & Agencies: need code-level fixes + audit logs.
+	•	Founders & SMBs: want simple monitoring + lawsuit protection.
+	•	PMs: track compliance trends.
+	•	Compliance-sensitive industries: healthcare, fintech, law, gov/edu RFPs.
 
-## 🧪 Testing
+⸻
 
-* Jest set up with mocks for Supabase and scan logic
-* Basic unit tests for monitoring script edge cases
+🧑‍💻 Key User Stories
+	1.	As a developer, I want WCAG issues with selectors and snippets so I can fix accessibility problems in code.
+	2.	As a PM, I want to see scan trends and score deltas to track progress.
+	3.	As an agency, I want branded PDF audit reports to win compliance-required RFPs.
+	4.	As a founder, I want monitoring + alerts so I don’t get blindsided by lawsuits.
+	5.	As a small business owner, I want a badge and plain-language risks so I can prove compliance without technical knowledge.
 
----
+⸻
 
-## 🧠 Design Philosophy
-
-* Keep user experience minimal, clean, and fast
-* Prioritize accurate data, not fake/mocked results
-* Eventually will compete with Accessibe and similar tools
-* Real product utility > marketing fluff
-
-## 🧠 Market Positioning
-
-Auditvia is a lightweight, modern alternative to legacy accessibility tools like Accessibe and UserWay. While competitors often inject bloated front-end overlays and overpromise automated fixes, Auditvia:
-
-* Prioritizes **accurate issue detection** via true WCAG scanning
-* Does **not** use overlay-based accessibility patches
-* Gives developers actionable insights (not just compliance scores)
-* Gives founders compliance health summaries without technical jargon
-* Focuses on **trust**, transparency, and real output
-
-### Target customers:
-
-#### For Developers & PMs:
-
-* Small to mid-size dev teams
-* Agencies building public-facing sites
-* Companies submitting to **government RFPs** or **educational contracts**
-* Compliance-sensitive industries (healthcare, fintech, law)
-
-#### For Founders & SMBs:
-
-* Small business owners with public websites
-* Founders looking to avoid lawsuits
-* Startups targeting enterprise, gov, or edu clients
-* Agencies looking to resell accessibility audits
-
----
-
-## 💡 Product Philosophy
-
-* **Truthful, accurate scans** — No fake scores or visual fluff
-* **Clean UI** — Dark mode, fast, no bloat
-* **Real monitoring** — Schedule scans, track trends, ship compliant sites
-* **Dev-focused** — Output includes selector + HTML + WCAG reference
-* **Founder-friendly** — Plain-language risk summaries and badges
-
----
-
-## 🧑‍💻 Key User Stories
-
-1. **As a developer**, I want to scan a site and get real WCAG issues, so I can fix accessibility problems without fluff.
-2. **As a project manager**, I want to view score trends and issue deltas, so I can track accessibility over time.
-3. **As an agency**, I want to show audit reports to win government/edu contracts that require ADA/WCAG compliance.
-4. **As a founder**, I want automated monitoring of my marketing site so I don’t get sued or lose RFPs.
-5. **As a small business owner**, I want a quick compliance badge and alerts if anything breaks, so I can prove I'm accessible.
-
----
-
-## 🎯 Competitive Advantage
-
-* No frontend overlays or widgets
-* Fully transparent WCAG scan engine (axe-core)
-* Clear issue output with code-level insight
-* Score trends, scan history, and monitoring built-in
-* Clean, developer-first dashboard UI
-* Simplified founder view with exports, alerts, and badge
-* Trust-first positioning: No fake scores, no legal overpromises
+🎯 Competitive Advantage
+	•	No overlays. Zero DOM patching.
+	•	Transparent engine. Built on axe-core with Playwright, not black-box scripts.
+	•	Engineer-grade fixes. PRs and tickets, not “widgets.”
+	•	Founder-friendly layer. PDF reports, alerts, badges.
+	•	Trust-first positioning. Real compliance, no false promises.

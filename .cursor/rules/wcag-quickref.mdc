@@ -1,0 +1,16 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# WCAG 2.2 Quick Reference (Auditvia Internal)
+
+Core success criteria we prioritize for MVP:
+
+- **1.1.1 Non-text Content** → Images must have alt text or descriptive labels.  
+- **1.3.1 Info and Relationships** → Use semantic HTML for structure (headings, lists, tables).  
+- **1.4.3 Contrast (Minimum)** → Text contrast ratio ≥ 4.5:1.  
+- **2.1.1 Keyboard** → All functionality must be operable by keyboard.  
+- **2.4.7 Focus Visible** → Focus indicators must be visible and clear.  
+- **3.3.1 Error Identification** → Errors must be programmatically and visually identifiable.  
+- **4.1.2 Name, Role, Value** → UI components must expose correct semantics via ARIA or native HTML.

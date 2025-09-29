@@ -66,11 +66,15 @@ export function SiteCard({
       }
 
       const data = await response.json()
+      console.log('🔍 [SiteCard] Audit API response:', data)
       
       if (!data.success || !data.scanId) {
+        console.error('🔍 [SiteCard] Invalid response - missing scanId:', data)
         throw new Error(data.error || 'Failed to start scan')
       }
 
+      console.log(`🔍 [SiteCard] ✅ Scan created successfully, navigating to: /dashboard/reports/${data.scanId}`)
+      
       // Navigate to the new scan report
       router.push(`/dashboard/reports/${data.scanId}`)
       toast.success('Scan started successfully')
@@ -90,10 +94,6 @@ export function SiteCard({
       "relative overflow-hidden",
       className
     )}>
-      <Link
-        href={`/dashboard/sites/${id}/report`}
-        className="block"
-      >
         <div className="p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-3">
@@ -179,7 +179,6 @@ export function SiteCard({
             <ScanHistory siteId={id} />
           </div>
         </div>
-      </Link>
 
       {/* Settings Drawer */}
       <SiteSettingsDrawer

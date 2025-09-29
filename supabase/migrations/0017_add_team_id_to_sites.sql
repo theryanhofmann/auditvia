@@ -64,7 +64,7 @@ USING (
 -- Create default teams for users without teams
 INSERT INTO teams (name, created_by)
 SELECT 
-  COALESCE(u.name, 'My') || '''s Team' as name,
+  'My Team' as name,
   u.id as created_by
 FROM users u
 WHERE NOT EXISTS (
@@ -77,7 +77,7 @@ WITH user_teams AS (
     user_id,
     team_id
   FROM team_members
-  ORDER BY user_id, created_at
+  ORDER BY user_id, joined_at
 )
 UPDATE sites s
 SET team_id = ut.team_id

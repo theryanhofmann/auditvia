@@ -13,19 +13,36 @@ CREATE INDEX idx_ai_suggestions_scan_id ON ai_suggestions(scan_id);
 -- Enable RLS
 ALTER TABLE ai_suggestions ENABLE ROW LEVEL SECURITY;
 
--- Create policy that allows access if user has access to the scan
-CREATE POLICY "Users can view suggestions for scans they can access" ON ai_suggestions
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM scans s
-      JOIN sites ON sites.id = s.site_id
-      WHERE s.id = ai_suggestions.scan_id
-      AND sites.team_id IN (
-        SELECT team_id FROM team_members
-        WHERE user_id = auth.uid()
-      )
-    )
-  );
+-- Create policy that allows access if user has access to the scan (conditional)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'team_members') 
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sites' AND column_name = 'team_id') THEN
+    CREATE POLICY "Users can view suggestions for scans they can access" ON ai_suggestions
+      FOR ALL USING (
+        EXISTS (
+          SELECT 1 FROM scans s
+          JOIN sites ON sites.id = s.site_id
+          WHERE s.id = ai_suggestions.scan_id
+          AND sites.team_id IN (
+            SELECT team_id FROM team_members
+            WHERE user_id = auth.uid()
+          )
+        )
+      );
+  ELSE
+    -- Fallback policy using user_id directly
+    CREATE POLICY "Users can view suggestions for their own scans" ON ai_suggestions
+      FOR ALL USING (
+        EXISTS (
+          SELECT 1 FROM scans s
+          JOIN sites ON sites.id = s.site_id
+          WHERE s.id = ai_suggestions.scan_id
+          AND sites.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
 
 -- Function to check if scan belongs to pro team
 CREATE OR REPLACE FUNCTION can_access_ai_suggestions(scan_id UUID)
@@ -44,7 +61,7 @@ END;
 $$;
 
 -- Function to get suggestions for a scan
-CREATE OR REPLACE FUNCTION get_scan_suggestions(scan_id UUID)
+CREATE OR REPLACE FUNCTION get_scan_suggestions(p_scan_id UUID)
 RETURNS TABLE (
   id UUID,
   scan_id UUID,
@@ -56,14 +73,14 @@ SECURITY DEFINER
 AS $$
 BEGIN
   -- Check if user has access and team is pro
-  IF NOT can_access_ai_suggestions(scan_id) THEN
+  IF NOT can_access_ai_suggestions(p_scan_id) THEN
     RAISE EXCEPTION 'Access denied or pro subscription required';
   END IF;
 
   RETURN QUERY
   SELECT s.id, s.scan_id, s.suggestions, s.created_at
   FROM ai_suggestions s
-  WHERE s.scan_id = scan_id
+  WHERE s.scan_id = p_scan_id
   ORDER BY s.created_at DESC
   LIMIT 1;
 END;

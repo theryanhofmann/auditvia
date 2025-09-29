@@ -1,0 +1,45 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+Auditvia – Engineering Context (Always Apply)
+
+North Star
+Auditvia delivers ADA/WCAG compliance without overlays. Overlay-level install (JS snippet or GitHub App) + code-level remediation via PRs and plain-language tickets. Axe-core is the scan engine. Outputs legal-defensible audit logs.
+
+MVP Scope (v0)
+	•	CLI/worker to scan a URL with Playwright + axe-core.
+	•	Artifacts: JSON + Markdown + PDF reports under reports/a11y/.
+	•	Dashboard (minimal) to list runs and open artifacts.
+	•	Ticket generator (Linear) per violation rule with WCAG refs + plain-language guidance.
+	•	CI comment on PRs with top violations; configurable fail threshold.
+	•	No auto-DOM patches; suggestions may be generated, not applied.
+
+Out of Scope (v0)
+	•	Overlays/widgets, DOM mutation, browser extensions.
+	•	Multi-framework fixers beyond safe patterns (alt text, labels, names).
+	•	Non-web targets (native/mobile) and non-ADA domains.
+
+Data Model (canonical names)
+users, teams, team_members, projects(url, monitoring_enabled),
+scans(status, summary_json), issues(severity, selector, wcag_ref, description, help_url).
+
+APIs (stable paths)
+POST /api/projects (create), DELETE /api/projects/:id,
+POST /api/scans (queue/run), GET /api/scans/:id,
+GET /api/issues?scanId=.
+
+Quality Gates (Definition of Done)
+	•	TypeScript strict + ESLint/Prettier clean.
+	•	Tests for new logic (unit; e2e when reasonable).
+	•	PR uses template and lists WCAG criteria affected.
+	•	Reports generated + saved deterministically under reports/a11y/.
+	•	No secrets in code; config via .env.
+	•	No overlays/DOM hacks—code-level fixes only.
+
+Conventions
+	•	Branch: issue-<linearId>-<slug>.
+	•	Conventional Commits.
+	•	Keep modules small; pure functions preferred; side-effects isolated.
+	•	When producing guidance, cite WCAG 2.2 numbers and link to MDN/APG.

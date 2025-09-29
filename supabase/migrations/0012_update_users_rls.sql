@@ -22,16 +22,22 @@ CREATE POLICY "Service role can manage all users"
   WITH CHECK (true);
 
 -- Allow authenticated users to read basic user info for team members
-CREATE POLICY "Users can read team member info"
-  ON public.users
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM team_members tm
-      WHERE tm.user_id = auth.uid()
-      AND tm.team_id IN (
-        SELECT team_id FROM team_members
-        WHERE user_id = users.id
-      )
-    )
-  );
+-- This policy is conditional on team_members table existing
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'team_members') THEN
+    CREATE POLICY "Users can read team member info"
+      ON public.users
+      FOR SELECT
+      USING (
+        EXISTS (
+          SELECT 1 FROM team_members tm
+          WHERE tm.user_id = auth.uid()
+          AND tm.team_id IN (
+            SELECT team_id FROM team_members
+            WHERE user_id = users.id
+          )
+        )
+      );
+  END IF;
+END $$;

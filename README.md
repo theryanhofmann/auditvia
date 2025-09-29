@@ -1,5 +1,69 @@
 # Auditvia
 
+## Development Setup
+
+### Prerequisites
+- Node.js 20+
+- Docker Desktop
+- Supabase CLI (`brew install supabase/tap/supabase`)
+
+### Initial Setup
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/theryanhofmann/auditvia.git
+   cd auditvia
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Copy environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+4. Set up your local database:
+   ```bash
+   supabase start
+   supabase db reset
+   ```
+
+### Database Sync
+To sync your local database with the latest migrations:
+
+1. Pull latest changes:
+   ```bash
+   git pull origin main
+   ```
+
+2. Reset your local database:
+   ```bash
+   supabase db reset
+   ```
+
+This will:
+- Drop all tables and data
+- Apply migrations in order
+- Seed initial data
+- Run RLS policies
+
+### Running Tests
+- Unit tests: `npm test`
+- E2E tests: `npm run e2e`
+- Smoke tests: `npm run smoke-test`
+
+### CI/CD
+The following checks run on every PR:
+- Lint: `npm run lint`
+- Type check: `npm run typecheck`
+- Unit tests: `npm test`
+- Smoke tests: `npm run smoke-test`
+
+### Database Migrations
+See [CONTRIBUTING.md](CONTRIBUTING.md) for migration guidelines.
+
 ![Smoke Test](https://github.com/theryanhofmann/auditvia/actions/workflows/smoke.yml/badge.svg)
 
 Automated CI smoke tests triggered on push to `main`. Ensures end-to-end functionality passes without auth or DB dependencies in DEV mode.
@@ -77,28 +141,36 @@ The following environment variables are required:
    ```
 
 3. **Environment Setup**
-   Copy `.env.example` to `.env.local` and configure:
-   ```bash
-   # Database
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   Copy `.env.local.example` to `.env.local` and configure:
 
-   # Authentication
+   ```bash
+   # Required for local development:
    NEXTAUTH_URL=http://localhost:3000
-   NEXTAUTH_SECRET=your_nextauth_secret
+   NEXTAUTH_SECRET=dev-only-secret-change-me
    GITHUB_ID=your_github_oauth_app_id
    GITHUB_SECRET=your_github_oauth_app_secret
-
-   # Email (Production)
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_USER=your_email@gmail.com
-   SMTP_PASS=your_app_password
-   EMAIL_FROM=your_email@gmail.com
-
-   # Development
-   DEV_NO_ADMIN=false
    ```
+
+   **Important GitHub OAuth Setup:**
+   1. Create a GitHub OAuth app at https://github.com/settings/developers
+   2. Set Authorization callback URL to exactly:
+      ```
+      http://localhost:3000/api/auth/callback/github
+      ```
+   3. Copy the Client ID and Client Secret to your .env.local
+
+4. **Start Development**
+   ```bash
+   supabase stop && supabase start
+   npm run dev
+   ```
+
+   **Troubleshooting:**
+   - If you see "AccessDenied", verify:
+     1. NEXTAUTH_URL is exactly http://localhost:3000
+     2. GitHub callback URL matches exactly
+     3. GITHUB_ID and GITHUB_SECRET are correct
+   - Use /debug/session (dev only) to inspect your session
 
 4. **Database Setup**
    Run the database migrations in your Supabase SQL editor:

@@ -4,13 +4,9 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createClient } from '@/app/lib/supabase/server'
 import OpenAI from 'openai'
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('Missing OPENAI_API_KEY')
-}
-
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
-})
+}) : null
 
 const SYSTEM_PROMPT = `You are an accessibility expert helping developers fix WCAG violations. For each issue:
 1. Explain the problem in plain language
@@ -33,6 +29,13 @@ export async function GET(
   { params }: { params: { scanId: string } }
 ) {
   try {
+    // Check if OpenAI is available
+    if (!openai) {
+      return NextResponse.json({ 
+        error: 'AI suggestions are not available. OpenAI API key is not configured.' 
+      }, { status: 503 })
+    }
+
     // 1. Verify authentication
     const session = await getServerSession(authOptions)
     if (!session?.user) {

@@ -9,8 +9,8 @@ type Site = Database['public']['Tables']['sites']['Row'] & {
   scans?: Array<{
     id: string
     created_at: string
-    score: number | null
     total_violations: number | null
+    status: string | null
   }>
 }
 

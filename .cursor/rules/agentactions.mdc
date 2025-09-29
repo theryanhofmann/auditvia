@@ -1,0 +1,16 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+The agent may:
+- Create new feature folders and skeleton files.  
+- Write unit tests and minimal e2e tests.  
+- Generate PR descriptions with WCAG criteria references.  
+- Update `/docs` with examples or notes.  
+- Generate compliance reports in `/reports/a11y/`.
+
+The agent may NOT:
+- Delete files unless explicitly told.  
+- Commit untyped or `any`-heavy code.  
+- Introduce overlays, DOM-mutation widgets, or quick-fix libraries.

@@ -153,5 +153,8 @@ export function CompareClient({ oldScan, newScan, diff, isPro }: CompareClientPr
 function calculateScore(scan: Scan): number {
   const total = scan.total_violations + scan.passes + scan.incomplete + scan.inapplicable
   if (total === 0) return 0
-  return Math.round((scan.passes / total) * 100)
+  
+  // Treat inapplicable as successful tests (consistent with other score calculations)
+  const successfulTests = scan.passes + scan.inapplicable
+  return Math.round((successfulTests / total) * 100)
 } 

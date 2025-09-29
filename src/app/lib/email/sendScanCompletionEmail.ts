@@ -3,7 +3,7 @@ import { render } from '@react-email/render'
 import ScanCompletionEmail from '@/app/emails/ScanCompletionEmail'
 import { Site, Scan, Issue, EmailUser } from '@/app/types/email'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 interface SendScanCompletionEmailParams {
   user: EmailUser
@@ -18,6 +18,12 @@ export async function sendScanCompletionEmail({
   scan,
   violations,
 }: SendScanCompletionEmailParams) {
+  // Skip email in development if no RESEND_API_KEY is configured
+  if (!resend) {
+    console.log('📧 Email sending skipped - no RESEND_API_KEY configured')
+    return null
+  }
+
   if (!user.pro || !user.email) {
     return null
   }

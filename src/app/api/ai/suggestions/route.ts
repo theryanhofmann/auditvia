@@ -5,9 +5,9 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
 
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
-})
+}) : null
 
 const SYSTEM_PROMPT = `You are an accessibility expert analyzing WCAG violations. 
 Provide clear, actionable advice for fixing accessibility issues.
@@ -20,6 +20,13 @@ Format your response in JSON with three sections:
 
 export async function POST(request: Request) {
   try {
+    // Check if OpenAI is available
+    if (!openai) {
+      return NextResponse.json({ 
+        error: 'AI suggestions are not available. OpenAI API key is not configured.' 
+      }, { status: 503 })
+    }
+
     // Check auth and Pro status
     const session = await getServerSession(authOptions)
     if (!session?.user) {

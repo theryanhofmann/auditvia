@@ -1,0 +1,23 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Accessibility Remediation Examples
+
+### Image Alt
+❌ `<img src="logo.png">`  
+✅ `<img src="logo.png" alt="Auditvia logo">`
+
+### Button Labels
+❌ `<button></button>`  
+✅ `<button aria-label="Submit form"></button>`
+
+### Color Contrast
+❌ `color: #999; background: #fff;`  
+✅ `color: #333; background: #fff;` (contrast > 4.5:1)
+
+### Form Error
+❌ `<input type="text" aria-invalid="true">` (no feedback)  
+✅ `<input type="text" aria-invalid="true" aria-describedby="error-msg">`  
+`<span id="error-msg">Please enter a valid email</span>`

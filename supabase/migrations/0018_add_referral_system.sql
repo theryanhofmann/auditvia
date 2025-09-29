@@ -1,7 +1,10 @@
--- Create index for faster referral lookups if it doesn't exist
+-- Create index for faster referral lookups if column and index don't exist
 DO $$ 
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'users' AND column_name = 'referral_code'
+  ) AND NOT EXISTS (
     SELECT 1 FROM pg_indexes 
     WHERE indexname = 'users_referral_code_idx'
   ) THEN
@@ -17,23 +20,47 @@ DROP POLICY IF EXISTS "Users can read their own referral data" ON users;
 DROP POLICY IF EXISTS "Users can update their own referral data" ON users;
 
 -- Users can read their own referral data and the referral_code of others
-CREATE POLICY "Users can read their own referral data"
-  ON users
-  FOR SELECT
-  USING (
-    (auth.uid())::uuid = id OR 
-    EXISTS (
-      SELECT 1 FROM users u2 
-      WHERE u2.id = (auth.uid())::uuid 
-      AND u2.referred_by::text = users.referral_code::text
-    )
-  );
+-- Only create this policy if the required columns exist
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'users' AND column_name = 'referred_by'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'users' AND column_name = 'referral_code'
+  ) THEN
+    CREATE POLICY "Users can read their own referral data"
+      ON users
+      FOR SELECT
+      USING (
+        (auth.uid())::uuid = id OR
+        EXISTS (
+          SELECT 1 FROM users u2
+          WHERE u2.id = (auth.uid())::uuid
+          AND u2.referred_by::text = users.referral_code::text
+        )
+      );
+  END IF;
+END $$;
 
 -- Users can only update their own referral data
-CREATE POLICY "Users can update their own referral data"
-  ON users
-  FOR UPDATE
-  USING ((auth.uid())::uuid = id);
+-- Only create this policy if the required columns exist
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'users' AND column_name = 'referred_by'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'users' AND column_name = 'referral_code'
+  ) THEN
+    CREATE POLICY "Users can update their own referral data"
+      ON users
+      FOR UPDATE
+      USING ((auth.uid())::uuid = id);
+  END IF;
+END $$;
 
 -- Drop existing function and trigger if they exist
 DROP TRIGGER IF EXISTS on_user_referred ON users;

@@ -1,24 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
-import Stripe from 'stripe'
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing STRIPE_SECRET_KEY environment variable')
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-06-30.basil'
-})
-
-const PRICE_ID = process.env.STRIPE_PRICE_ID // You'll need to create this in Stripe Dashboard
+import { auth } from '@/auth'
+import { stripeUtils, testModeHelpers } from '@/lib/stripe'
 
 export async function POST(request: Request) {
   try {
+    console.log('💳 [checkout] Starting Pro upgrade checkout flow')
+    
     // Verify authentication
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -29,23 +20,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Team ID is required' }, { status: 400 })
     }
 
+    console.log(`💳 [checkout] Processing upgrade for team: ${teamId}`)
+
     // Initialize Supabase client
     const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Verify team exists and user is owner/admin
+    // Verify team exists and user has permission
     const { data: teamMember, error: teamError } = await supabase
       .from('team_members')
-      .select('role, team:teams!inner(billing_status)')
+      .select(`
+        role, 
+        team:teams!inner(
+          id, 
+          name, 
+          billing_status, 
+          stripe_customer_id
+        )
+      `)
       .eq('team_id', teamId)
       .eq('user_id', session.user.id)
       .single()
 
     if (teamError || !teamMember) {
+      console.error(`💳 [checkout] Team access denied for user ${session.user.id}:`, teamError)
       return NextResponse.json(
-        { error: 'Team not found or unauthorized' },
+        { error: 'Team not found or access denied' },
         { status: 403 }
       )
     }
@@ -57,39 +59,44 @@ export async function POST(request: Request) {
       )
     }
 
+    const team = teamMember.team as any
+
     // Check if team is already on Pro plan
-    if (teamMember.team.billing_status === 'pro') {
+    if (team.billing_status === 'pro') {
       return NextResponse.json(
         { error: 'Team is already on Pro plan' },
         { status: 400 }
       )
     }
 
+    console.log(`💳 [checkout] Creating checkout session for team: ${team.name}`)
+
     // Create Stripe checkout session
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: PRICE_ID,
-          quantity: 1,
-        },
-      ],
-      customer_email: session.user.email || undefined,
-      success_url: `${process.env.NEXTAUTH_URL}/teams/${teamId}/settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXTAUTH_URL}/teams/${teamId}/settings?canceled=true`,
-      metadata: {
-        teamId // Store team ID for webhook
-      }
+    const checkoutSession = await stripeUtils.createCheckoutSession({
+      teamId,
+      customerEmail: session.user.email || undefined,
+      customerId: team.stripe_customer_id || undefined,
     })
 
     if (!checkoutSession.url) {
-      throw new Error('Failed to create checkout session')
+      throw new Error('Failed to create checkout session URL')
     }
 
-    return NextResponse.json({ url: checkoutSession.url })
+    // Log test mode info
+    const testBanner = testModeHelpers.getTestModeBanner()
+    if (testBanner) {
+      console.log(`💳 [checkout] ${testBanner.title}: ${testBanner.description}`)
+    }
+
+    console.log(`💳 [checkout] ✅ Checkout session created: ${checkoutSession.id}`)
+
+    return NextResponse.json({ 
+      url: checkoutSession.url,
+      sessionId: checkoutSession.id,
+      testMode: testBanner ? true : false,
+    })
   } catch (error) {
-    console.error('Error in POST /api/stripe/checkout:', error)
+    console.error('💳 [checkout] Error creating checkout session:', error)
     return NextResponse.json(
       { error: 'Failed to create checkout session' },
       { status: 500 }
