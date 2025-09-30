@@ -42,6 +42,9 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     initializeTeam()
   }, [])
 
+  // Simple cache for team data to avoid repeated API calls
+  const teamCache = new Map<string, { data: any; timestamp: number }>()
+
   useEffect(() => {
     // Fetch team details when teamId changes
     async function fetchTeamDetails() {
@@ -52,6 +55,15 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
       try {
         setLoading(true)
+
+        // Check cache first (5 minute TTL)
+        const cached = teamCache.get(teamId)
+        if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+          setTeam(cached.data)
+          setError(null)
+          return
+        }
+
         const response = await fetch(`/api/teams/${teamId}`)
         if (!response.ok) {
           // Handle 403 errors gracefully - user might not be a member of this team
@@ -65,8 +77,12 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
             throw new Error(`Failed to fetch team details: ${response.status}`)
           }
         }
-        
+
         const data = await response.json()
+
+        // Cache the result
+        teamCache.set(teamId, { data, timestamp: Date.now() })
+
         setTeam(data)
         setError(null)
       } catch (err) {

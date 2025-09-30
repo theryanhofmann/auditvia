@@ -61,16 +61,28 @@ export function SiteCard({
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to start scan')
+      // Parse response safely
+      let data
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        console.error('🔍 [SiteCard] Failed to parse API response:', parseError)
+        throw new Error('Invalid response from server')
       }
 
-      const data = await response.json()
       console.log('🔍 [SiteCard] Audit API response:', data)
-      
+
+      if (!response.ok) {
+        // API returned error response with structured error info
+        const errorMessage = data?.error?.message || `Server error: ${response.status}`
+        const errorCode = data?.error?.code || 'unknown_error'
+        throw new Error(`${errorMessage} (${errorCode})`)
+      }
+
       if (!data.success || !data.scanId) {
         console.error('🔍 [SiteCard] Invalid response - missing scanId:', data)
-        throw new Error(data.error || 'Failed to start scan')
+        const errorMessage = data?.error?.message || 'Failed to start scan'
+        throw new Error(errorMessage)
       }
 
       console.log(`🔍 [SiteCard] ✅ Scan created successfully, navigating to: /dashboard/reports/${data.scanId}`)
@@ -80,7 +92,33 @@ export function SiteCard({
       toast.success('Scan started successfully')
     } catch (error) {
       console.error('Error starting scan:', error)
-      toast.error('Failed to start scan. Please try again.')
+
+      // Extract meaningful error message
+      let errorMessage = 'Failed to start scan. Please try again.'
+      if (error instanceof Error) {
+        // Try to extract specific error details
+        const errorStr = error.message
+        if (errorStr.includes('playwright_missing')) {
+          errorMessage = 'Browser not available. Please try again later.'
+        } else if (errorStr.includes('rate_limit')) {
+          errorMessage = 'Too many scans recently. Please wait before trying again.'
+        } else if (errorStr.includes('authentication_error')) {
+          errorMessage = 'Please sign in to run scans.'
+        } else if (errorStr.includes('authorization_error')) {
+          errorMessage = 'You don\'t have permission to scan this site.'
+        } else if (errorStr.includes('validation_error')) {
+          errorMessage = 'Invalid scan request. Please check the site URL.'
+        } else if (errorStr.includes('database_error')) {
+          errorMessage = 'Server error. Please try again.'
+        } else {
+          // Use the original error message if it's not too generic
+          errorMessage = error.message.includes('Failed to start scan')
+            ? errorMessage
+            : error.message
+        }
+      }
+
+      toast.error(errorMessage)
       setIsScanning(false)
     }
   }

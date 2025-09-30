@@ -84,6 +84,9 @@ export async function GET(request: NextRequest) {
           id,
           created_at,
           total_violations,
+          passes,
+          incomplete,
+          inapplicable,
           status
         )
       `)

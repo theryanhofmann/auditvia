@@ -25,32 +25,32 @@ interface ScanResponse {
   success: boolean
   scanId: string
   status: 'pending' | 'running' | 'completed' | 'failed'
-  data?: {
-    scan: {
-      id: string
-      status: string
-      total_violations: number
-      passes: number
-      incomplete: number
-      inapplicable: number
-      scan_time_ms: number
-      site_id: string
-      score?: number
-    }
-  }
-  summary?: {
-    violations: number
-    passes: number
-    incomplete: number
-    inapplicable: number
-    scan_time_ms: number
-    score?: number
-    by_impact?: Record<string, number>
-  }
   error?: {
     code: string
     message: string
+    details?: string
   }
+}
+
+// Helper function to create consistent API responses
+function createResponse(
+  success: boolean,
+  scanId: string = '',
+  status: 'pending' | 'running' | 'completed' | 'failed' = 'failed',
+  error?: { code: string; message: string; details?: string },
+  responseStatus = success ? 201 : 500
+): NextResponse<ScanResponse> {
+  const response: ScanResponse = {
+    success,
+    scanId,
+    status
+  }
+
+  if (error) {
+    response.error = error
+  }
+
+  return NextResponse.json(response, { status: responseStatus })
 }
 
 export async function POST(request: Request): Promise<NextResponse<ScanResponse>> {
@@ -73,29 +73,19 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
     // Validate required fields
     if (!url || !siteId) {
       console.error('❌ Missing required fields')
-      return NextResponse.json({
-        success: false,
-        scanId: '',
-        status: 'failed',
-        error: {
-          code: 'validation_error',
-          message: 'Missing required fields: url and siteId'
-        }
-      } as ScanResponse, { status: 400 })
+      return createResponse(false, '', 'failed', {
+        code: 'validation_error',
+        message: 'Missing required fields: url and siteId'
+      }, 400)
     }
 
     // Validate team ownership using current session
     const session = await auth()
     if (!session?.user?.id) {
-      return NextResponse.json({
-        success: false,
-        scanId: '',
-        status: 'failed',
-        error: {
-          code: 'authentication_error',
-          message: 'Authentication required'
-        }
-      } as ScanResponse, { status: 401 })
+      return createResponse(false, '', 'failed', {
+        code: 'authentication_error',
+        message: 'Authentication required'
+      }, 401)
     }
 
     // Simple rate limiting: check for recent scans by this user
@@ -109,15 +99,10 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
 
     if (recentScans && recentScans.length >= 5) {
       console.warn(`🚦 [rate-limit] User ${session.user.id} has ${recentScans.length} scans in last 5 minutes`)
-      return NextResponse.json({
-        success: false,
-        error: {
-          code: 'rate_limit',
-          message: 'Rate limit exceeded. Please wait before starting another scan.'
-        },
-        scanId: '',
-        status: 'failed'
-      } as ScanResponse, { status: 429 })
+      return createResponse(false, '', 'failed', {
+        code: 'rate_limit',
+        message: 'Rate limit exceeded. Please wait before starting another scan.'
+      }, 429)
     }
 
     // Verify site ownership using centralized helper
@@ -125,15 +110,10 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
     
     if (!ownershipResult.allowed) {
       const { error } = ownershipResult
-      return NextResponse.json({
-        success: false,
-        scanId: '',
-        status: 'failed',
-        error: {
-          code: error!.code === 'site_not_found' ? 'not_found' : 'authorization_error',
-          message: error!.message
-        }
-      } as ScanResponse, { status: error!.httpStatus })
+      return createResponse(false, '', 'failed', {
+        code: error!.code === 'site_not_found' ? 'not_found' : 'authorization_error',
+        message: error!.message
+      }, error!.httpStatus)
     }
 
     const { role, site } = ownershipResult
@@ -171,15 +151,10 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
         { reason: 'playwright_missing' }
       )
 
-      return NextResponse.json({
-        success: false,
-        scanId: failedScan?.id || '',
-        status: 'failed',
-        error: {
-          code: 'playwright_missing',
-          message: playwrightCheck.error || 'Browser not available for scanning'
-        }
-      } as ScanResponse, { status: 503 })
+      return createResponse(false, failedScan?.id || '', 'failed', {
+        code: 'playwright_missing',
+        message: playwrightCheck.error || 'Browser not available for scanning'
+      }, 503)
     }
     console.log('🎭 [audit] ✅ Playwright preflight passed')
 
@@ -194,15 +169,10 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
 
     if (!scanCreationResult.success || !scanCreationResult.scanId) {
       console.error('❌ Failed to create scan record:', scanCreationResult.error)
-      return NextResponse.json({
-        success: false,
-        scanId: '',
-        status: 'failed',
-        error: {
-          code: 'database_error',
-          message: scanCreationResult.error || 'Failed to create scan record'
-        }
-      } as ScanResponse, { status: 500 })
+      return createResponse(false, '', 'failed', {
+        code: 'database_error',
+        message: scanCreationResult.error || 'Failed to create scan record'
+      }, 500)
     }
     
     const scanId = scanCreationResult.scanId
@@ -225,23 +195,14 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
       console.error(`🧵 [job] failed - scanId: ${scanId}:`, error)
     })
 
-    return NextResponse.json({
-      success: true,
-      scanId,
-      status: 'running'
-    } as ScanResponse, { status: 201 })
+    return createResponse(true, scanId, 'running')
 
   } catch (error) {
     console.error('❌ Audit error:', error)
-    return NextResponse.json({
-      success: false,
-      scanId: '',
-      status: 'failed',
-      error: {
-        code: 'internal_error',
-        message: error instanceof Error ? error.message : 'Failed to run accessibility audit'
-      }
-    } as ScanResponse, { status: 500 })
+    return createResponse(false, '', 'failed', {
+      code: 'internal_error',
+      message: error instanceof Error ? error.message : 'Failed to run accessibility audit'
+    }, 500)
   }
 }
 
@@ -369,9 +330,7 @@ async function runScanJob(
                 impact: violation.impact,
                 description: violation.description,
                 help_url: violation.helpUrl,
-                html: node.html,
-                failure_summary: node.failureSummary,
-                wcag_rule: wcagRule
+                html: node.html
               }])
           ))
         })

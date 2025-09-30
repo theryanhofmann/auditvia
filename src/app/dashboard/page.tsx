@@ -71,6 +71,17 @@ function DashboardContent({
         // Treat inapplicable as successful tests (same as report pages)
         const successfulTests = (scan.passes || 0) + (scan.inapplicable || 0)
         const score = Math.round((successfulTests / totalTests) * 100)
+        
+        console.log(`📊 [dashboard] Score calculation for scan ${scan.id}:`, {
+          passes: scan.passes,
+          violations: scan.total_violations,
+          incomplete: scan.incomplete,
+          inapplicable: scan.inapplicable,
+          totalTests,
+          successfulTests,
+          score
+        })
+        
         return Math.max(0, Math.min(100, score))
       }
       

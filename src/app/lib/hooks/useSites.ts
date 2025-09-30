@@ -10,6 +10,9 @@ type Site = Database['public']['Tables']['sites']['Row'] & {
     id: string
     created_at: string
     total_violations: number | null
+    passes: number | null
+    incomplete: number | null
+    inapplicable: number | null
     status: string | null
   }>
 }

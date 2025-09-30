@@ -178,35 +178,51 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
           body: JSON.stringify(auditPayload),
         })
 
-        if (auditResponse.ok) {
-          const auditData = await auditResponse.json()
-          console.log('Audit API response:', auditData)
-          
-          if (auditData.success && auditData.scanId) {
-            // Scan was created successfully, navigate to the running scan page
-            toast.success('Site added! Scan is starting...')
-            window.location.href = `/dashboard/reports/${auditData.scanId}`
-            return // Exit early to prevent form reset and modal close
-          } else {
-            // API returned success but no scanId
-            console.warn('Scan API returned success but no scanId:', auditData)
-            toast.success('Site added! You can run a scan manually from the dashboard.')
-          }
+        // Parse response safely
+        let auditData
+        try {
+          auditData = await auditResponse.json()
+        } catch (parseError) {
+          console.error('Failed to parse scan API response:', parseError)
+          auditData = { error: { message: 'Invalid response from server' } }
+        }
+
+        console.log('Audit API response:', auditData)
+
+        if (auditResponse.ok && auditData.success && auditData.scanId) {
+          // Scan was created successfully, navigate to the running scan page
+          toast.success('Site added! Scan is starting...')
+          window.location.href = `/dashboard/reports/${auditData.scanId}`
+          return // Exit early to prevent form reset and modal close
         } else {
-          // Scan API failed
-          const errorData = await auditResponse.json().catch(() => ({}))
+          // Scan API failed or returned success but no scanId
+          const errorMessage = auditData?.error?.message || 'Failed to start initial scan'
+          const errorCode = auditData?.error?.code || 'unknown_error'
+
           console.error('Initial scan failed:', {
             status: auditResponse.status,
             statusText: auditResponse.statusText,
-            errorData,
+            errorCode,
+            errorMessage,
             payload: auditPayload
           })
-          
-          if (auditResponse.status === 400) {
-            console.error('400 error - likely missing required fields. Payload was:', auditPayload)
+
+          // Show specific error messages for different error types
+          if (errorCode === 'playwright_missing') {
+            toast.error('Browser not available. Site added! You can run a scan manually from the dashboard.')
+          } else if (errorCode === 'rate_limit') {
+            toast.error('Too many recent scans. Site added! You can run a scan manually from the dashboard.')
+          } else if (errorCode === 'authentication_error') {
+            toast.error('Please sign in to run scans. Site added! You can run a scan manually from the dashboard.')
+          } else if (errorCode === 'authorization_error') {
+            toast.error('You don\'t have permission to scan this site. Site added! You can run a scan manually from the dashboard.')
+          } else if (errorCode === 'validation_error') {
+            toast.error('Invalid scan request. Site added! You can run a scan manually from the dashboard.')
+          } else if (errorCode === 'database_error') {
+            toast.error('Server error. Site added! You can run a scan manually from the dashboard.')
+          } else {
+            toast.error(`Site added! Scan failed: ${errorMessage}`)
           }
-          
-          toast.success('Site added! You can run a scan manually from the dashboard.')
         }
       } catch (scanError) {
         // Network or other error during scan creation

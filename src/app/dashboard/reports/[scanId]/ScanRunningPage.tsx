@@ -35,18 +35,22 @@ export function ScanRunningPage({
 
   // Calculate elapsed time since scan creation
   const scanCreatedAt = new Date(createdAt).getTime()
-  const lastActivity = new Date(lastActivityAt || createdAt).getTime()
+  const initialLastActivity = new Date(lastActivityAt || createdAt).getTime()
   const now = Date.now()
   
   const totalElapsedMs = now - scanCreatedAt
-  const heartbeatAgeMs = now - lastActivity
+  
+  // For legacy schema compatibility: if lastActivityAt equals createdAt, 
+  // it means we're in legacy mode and should disable heartbeat checks
+  const isLegacyMode = !lastActivityAt || lastActivityAt === createdAt
+  const heartbeatAgeMs = now - initialLastActivity
 
   useEffect(() => {
     // Update elapsed time every second for display and check guardrails
     const elapsedTimer = setInterval(() => {
       const currentTime = Date.now()
       const currentElapsed = currentTime - scanCreatedAt
-      const currentHeartbeatAge = currentTime - lastActivity
+      const currentHeartbeatAge = currentTime - initialLastActivity
       
       setElapsedTime(currentElapsed)
       
@@ -63,7 +67,8 @@ export function ScanRunningPage({
           if (userId) {
             scanAnalytics.pollingStopped(scanId, userId, 'timeout', pollCount, currentElapsed)
           }
-        } else if (currentHeartbeatAge > heartbeatStaleMs) {
+        } else if (!isLegacyMode && currentHeartbeatAge > heartbeatStaleMs) {
+          // Only check heartbeat staleness if NOT in legacy mode
           console.warn(`🔄 [polling] Stopping due to stale heartbeat: ${Math.round(currentHeartbeatAge/1000)}s > ${heartbeatIntervalSeconds * 3}s`)
           setIsPolling(false)
           setStuckReason('heartbeat_stale')
@@ -76,7 +81,7 @@ export function ScanRunningPage({
     }, 1000)
 
     return () => clearInterval(elapsedTimer)
-  }, [scanCreatedAt, lastActivity, maxRuntimeMinutes, heartbeatIntervalSeconds, isPolling, userId, scanId, pollCount])
+  }, [scanCreatedAt, initialLastActivity, maxRuntimeMinutes, heartbeatIntervalSeconds, isPolling, userId, scanId, pollCount, isLegacyMode])
 
   useEffect(() => {
     if (!isPolling || stuckReason) return
@@ -198,7 +203,7 @@ export function ScanRunningPage({
                     {Math.floor(elapsedTime / 1000)}s elapsed
                   </span>
                 </div>
-                {lastActivityAt && (
+                {!isLegacyMode && lastActivityAt && (
                   <div className="flex items-center space-x-1">
                     <Activity className="w-3 h-3" />
                     <span>
@@ -220,8 +225,8 @@ export function ScanRunningPage({
                 </div>
               )}
 
-              {/* Heartbeat health indicator */}
-              {lastActivityAt && heartbeatAgeMs > heartbeatIntervalSeconds * 2 * 1000 && (
+              {/* Heartbeat health indicator - only show in enhanced mode */}
+              {!isLegacyMode && lastActivityAt && heartbeatAgeMs > heartbeatIntervalSeconds * 2 * 1000 && (
                 <div className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">
                   ⚠️ Scan activity slower than expected
                 </div>

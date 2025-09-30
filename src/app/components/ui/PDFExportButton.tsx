@@ -7,6 +7,46 @@ import { toast } from 'sonner'
 import { useTeam } from '@/app/context/TeamContext'
 import { ProFeatureLock } from '@/app/components/ui/ProUpgradeButton'
 
+// Simple cache for team data to avoid repeated API calls
+const teamDataCache = new Map<string, any>()
+
+async function getCachedTeamData(teamId: string) {
+  // Return cached data if available
+  if (teamDataCache.has(teamId)) {
+    return teamDataCache.get(teamId)
+  }
+
+  // Try to get from localStorage first (for client-side caching)
+  const cached = localStorage.getItem(`team_${teamId}`)
+  if (cached) {
+    try {
+      const data = JSON.parse(cached)
+      // Check if cache is still fresh (less than 5 minutes old)
+      if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+        teamDataCache.set(teamId, data.team)
+        return data.team
+      }
+    } catch (error) {
+      // Invalid cache, ignore
+    }
+  }
+
+  return null
+}
+
+function setCachedTeamData(teamId: string, teamData: any) {
+  teamDataCache.set(teamId, teamData)
+  // Also cache in localStorage for persistence across page refreshes
+  try {
+    localStorage.setItem(`team_${teamId}`, JSON.stringify({
+      team: teamData,
+      timestamp: Date.now()
+    }))
+  } catch (error) {
+    // localStorage not available or quota exceeded, ignore
+  }
+}
+
 interface PDFExportButtonProps {
   scanId: string
   siteName?: string
@@ -44,12 +84,19 @@ export function PDFExportButton({
       }
       
       try {
-        const response = await fetch(`/api/teams/${teamId}`)
-        if (response.ok) {
-          const team = await response.json()
-          setIsPro(team.billing_status === 'pro' || team.is_pro === true)
+        // Use cached team data instead of making API call
+        const cachedTeam = await getCachedTeamData(teamId)
+        if (cachedTeam) {
+          setIsPro(cachedTeam.billing_status === 'pro' || cachedTeam.is_pro === true)
         } else {
-          setIsPro(false)
+          const response = await fetch(`/api/teams/${teamId}`)
+          if (response.ok) {
+            const team = await response.json()
+            setIsPro(team.billing_status === 'pro' || team.is_pro === true)
+            setCachedTeamData(teamId, team) // Cache the result
+          } else {
+            setIsPro(false)
+          }
         }
       } catch (error) {
         console.error('Failed to check Pro status:', error)
@@ -287,12 +334,19 @@ export function PDFExportCard({ scanId, siteName, className = '' }: PDFExportCar
       }
       
       try {
-        const response = await fetch(`/api/teams/${teamId}`)
-        if (response.ok) {
-          const team = await response.json()
-          setIsPro(team.billing_status === 'pro' || team.is_pro === true)
+        // Use cached team data instead of making API call
+        const cachedTeam = await getCachedTeamData(teamId)
+        if (cachedTeam) {
+          setIsPro(cachedTeam.billing_status === 'pro' || cachedTeam.is_pro === true)
         } else {
-          setIsPro(false)
+          const response = await fetch(`/api/teams/${teamId}`)
+          if (response.ok) {
+            const team = await response.json()
+            setIsPro(team.billing_status === 'pro' || team.is_pro === true)
+            setCachedTeamData(teamId, team) // Cache the result
+          } else {
+            setIsPro(false)
+          }
         }
       } catch (error) {
         console.error('Failed to check Pro status:', error)

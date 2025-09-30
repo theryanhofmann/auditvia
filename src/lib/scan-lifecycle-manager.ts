@@ -396,47 +396,39 @@ export class ScanLifecycleManager {
     try {
       const now = new Date().toISOString()
       
-      // Try the enhanced insert first (with new lifecycle columns)
-      let { data, error } = await this.supabase
+      const capabilities = await getSchemaCapabilities()
+
+      // Start with only guaranteed columns (those that exist in legacy schema)
+      const scanPayload: any = {
+        site_id: scanData.site_id,
+        user_id: scanData.user_id,
+        status: scanData.status || 'queued',
+        created_at: now,
+        updated_at: now
+      }
+
+      // Add lifecycle columns ONLY if available
+      if (capabilities.hasLastActivityAt) {
+        scanPayload.last_activity_at = now
+      }
+
+      if (capabilities.hasProgressMessage && scanData.progress_message) {
+        scanPayload.progress_message = scanData.progress_message
+      }
+
+      if (capabilities.hasHeartbeatIntervalSeconds) {
+        scanPayload.heartbeat_interval_seconds = scanData.heartbeat_interval_seconds || 30
+      }
+
+      if (capabilities.hasMaxRuntimeMinutes) {
+        scanPayload.max_runtime_minutes = scanData.max_runtime_minutes || 15
+      }
+
+      const { data, error } = await this.supabase
         .from('scans')
-        .insert({
-          ...scanData,
-          status: scanData.status || 'queued',
-          created_at: now,
-          updated_at: now,
-          last_activity_at: now,
-          progress_message: scanData.progress_message || 'Scan queued',
-          heartbeat_interval_seconds: scanData.heartbeat_interval_seconds || 30,
-          max_runtime_minutes: scanData.max_runtime_minutes || 15
-        })
+        .insert(scanPayload)
         .select()
         .single()
-
-      // If we get a schema cache error, fall back to basic scan creation
-      if (error && (error.code === 'PGRST204' || error.message?.includes('does not exist'))) {
-        console.warn(`🔄 [lifecycle] Schema cache error detected, falling back to basic scan creation:`, error.message)
-        
-        // Fallback: Create scan with only the guaranteed columns
-        const fallbackResult = await this.supabase
-          .from('scans')
-          .insert({
-            site_id: scanData.site_id,
-            user_id: scanData.user_id,
-            status: scanData.status || 'queued',
-            created_at: now,
-            updated_at: now
-          })
-          .select()
-          .single()
-
-        data = fallbackResult.data
-        error = fallbackResult.error
-        
-        if (!error && data) {
-          console.log(`✅ [lifecycle] Fallback scan creation successful: ${data.id}`)
-          return { success: true, scanId: data.id }
-        }
-      }
 
       if (error) {
         console.error('🔄 [lifecycle] Failed to create scan:', error)

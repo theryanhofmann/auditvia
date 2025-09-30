@@ -54,23 +54,47 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
   // Try up to 3 times with short delays to handle read-after-write race conditions
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
+      // Build dynamic select query based on available columns
+      const baseColumns = `
+        id,
+        status,
+        started_at,
+        finished_at,
+        created_at,
+        site_id,
+        user_id,
+        total_violations,
+        passes,
+        incomplete,
+        inapplicable,
+        scan_time_ms,
+        updated_at
+      `
+
+      const lifecycleColumns = `
+        ended_at,
+        last_activity_at,
+        progress_message,
+        heartbeat_interval_seconds,
+        max_runtime_minutes,
+        error_message
+      `
+
+      // Check if we can query lifecycle columns (they should exist after migration)
+      let selectQuery = baseColumns
+      try {
+        const capabilities = await getSchemaCapabilities()
+        if (capabilities.hasEndedAt && capabilities.hasLastActivityAt && capabilities.hasProgressMessage) {
+          selectQuery += `, ${lifecycleColumns}`
+        }
+      } catch (error) {
+        // If capabilities check fails, stick with base columns
+        console.debug(`🔍 [report] Capabilities check failed, using base columns:`, error)
+      }
+
       const result = await supabase
         .from('scans')
-        .select(`
-          id,
-          status,
-          started_at,
-          finished_at,
-          created_at,
-          site_id,
-          user_id,
-          total_violations,
-          passes,
-          incomplete,
-          inapplicable,
-          scan_time_ms,
-          updated_at
-        `)
+        .select(selectQuery)
         .eq('id', params.scanId)
         .single()
       
@@ -166,11 +190,18 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
     )
   }
 
-  // Step 3: Get the issues
+  // Step 3: Get the issues (violations)
   const { data: issues, error: issuesError } = await supabase
     .from('issues')
     .select('id, rule, selector, severity, impact, description, help_url, html')
     .eq('scan_id', scan.id)
+    .order('impact', { ascending: false })
+
+  console.log(`🔍 [report] Issues query result:`, { 
+    issuesFound: issues?.length || 0, 
+    scanId: scan.id,
+    error: issuesError?.message || null 
+  })
 
   if (issuesError) {
     console.warn(`⚠️ [report] Could not load issues for scan ${scan.id}:`, issuesError)
@@ -244,7 +275,7 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
         scanId={combinedScan.id} 
         siteUrl={combinedScan.sites[0]?.url || ''} 
         createdAt={combinedScan.created_at}
-        lastActivityAt={combinedScan.last_activity_at || combinedScan.created_at}
+        lastActivityAt={combinedScan.last_activity_at} // Don't provide fallback - let component detect legacy mode
         progressMessage={combinedScan.progress_message || 'Scanning in progress...'}
         maxRuntimeMinutes={combinedScan.max_runtime_minutes || 15}
         heartbeatIntervalSeconds={combinedScan.heartbeat_interval_seconds || 30}
