@@ -21,7 +21,11 @@
     "db:reset": "npx supabase db reset",
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",
-    "supabase:status": "npx supabase status"
+    "supabase:status": "npx supabase status",
+    "claude": "npx claude",
+    "claude:help": "npx claude --help",
+    "claude:continue": "npx claude --continue",
+    "claude:setup": "npx claude setup-token"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -79,6 +83,7 @@
     "typescript": "^5.4.2"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-code": "^2.0.5",
     "@next/eslint-plugin-next": "^15.3.5",
     "@types/jest": "^30.0.0",
     "@types/node-fetch": "^2.6.11",

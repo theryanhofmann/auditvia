@@ -7,6 +7,13 @@
 
 Enterprise accessibility compliance platform with AI-native remediation.
 
+## 🤖 AI Pair Programming with Claude Code
+
+This project is enhanced with [Claude Code](https://www.claude.com/product/claude-code) - your AI assistant that understands the entire Auditvia codebase. Use it for onboarding, debugging, code reviews, and feature development.
+
+**Quick start**: `npm run claude`  
+**Full guide**: [docs/CLAUDE_CODE_GUIDE.md](./docs/CLAUDE_CODE_GUIDE.md)
+
 ## Development Setup
 
 ### Prerequisites
