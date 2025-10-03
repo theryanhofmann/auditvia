@@ -105,8 +105,6 @@ describe('Team RLS Policies', () => {
       .insert({ name: 'Test Team', created_by: ownerUserId })
       .select()
     
-    console.error('Insert result:', { data: insertResult.data, error: insertResult.error, status: insertResult.status })
-    
     if (insertResult.error) {
       console.error('Failed to insert team:', JSON.stringify(insertResult.error, null, 2))
       throw new Error(`Failed to insert team: ${insertResult.error?.message || JSON.stringify(insertResult.error)}`)
@@ -235,28 +233,62 @@ describe('Team RLS Policies', () => {
 
       expect(error).toBeNull()
 
-      // Revert
-      await adminClient
+      // Revert back to member for next test
+      const { error: revertError } = await adminClient
         .from('team_members')
         .update({ role: 'member' })
         .eq('team_id', testTeamId)
         .eq('user_id', memberUserId)
+      
+      expect(revertError).toBeNull()
+      
+      // Verify it was reverted
+      const { data: verifyData } = await adminClient
+        .from('team_members')
+        .select('role')
+        .eq('team_id', testTeamId)
+        .eq('user_id', memberUserId)
+        .single()
+      
+      expect(verifyData?.role).toBe('member')
     })
 
     it('should block member from updating roles', async () => {
+      // Verify member role before test
+      const { data: roleBefore } = await adminClient
+        .from('team_members')
+        .select('role')
+        .eq('team_id', testTeamId)
+        .eq('user_id', memberUserId)
+        .single()
+      
+      expect(roleBefore?.role).toBe('member')
+      
       const memberClient = createClient(supabaseUrl, supabaseAnonKey)
       await memberClient.auth.signInWithPassword({
         email: 'member@test.com',
         password: 'password123'
       })
 
-      const { error } = await memberClient
+      const { data, error } = await memberClient
         .from('team_members')
         .update({ role: 'admin' })
         .eq('team_id', testTeamId)
         .eq('user_id', memberUserId)
 
-      expect(error).not.toBeNull()
+      // Check if role actually changed
+      const { data: roleAfter } = await adminClient
+        .from('team_members')
+        .select('role')
+        .eq('team_id', testTeamId)
+        .eq('user_id', memberUserId)
+        .single()
+
+      // The update should be blocked - role should still be 'member'
+      expect(roleAfter?.role).toBe('member')
+      if (error) {
+        expect(error.code).toBe('42501') // insufficient_privilege
+      }
     })
 
     it('should allow team members to view other members', async () => {

@@ -1,0 +1,25 @@
+{
+  "projectName": "Auditvia",
+  "description": "ADA/WCAG compliance platform - code-level accessibility remediation",
+  "allowedTools": [
+    "Bash",
+    "Edit",
+    "Read",
+    "Write",
+    "Search",
+    "Browser"
+  ],
+  "additionalDirectories": [
+    "src",
+    "scripts",
+    "supabase/migrations",
+    "__tests__"
+  ],
+  "appendSystemPrompt": "You are working on Auditvia, an accessibility compliance platform. Key context:\n\n- Stack: Next.js 15 + TypeScript, Supabase (PostgreSQL), Playwright + axe-core for scanning\n- Architecture: Overlay-level install (JS snippet or GitHub App) + code-level fixes via PRs\n- No DOM mutations or overlays - all fixes are code-level\n- TypeScript strict mode always on\n- Follow Conventional Commits (feat:, fix:, chore:)\n- WCAG 2.2 compliance is the standard\n- Integration tests require local Supabase (npm run supabase:start)\n- Always export ScanResult types and maintain type safety\n- PR template required: What, Why, How, Risk, Tests\n\nWorkflow conventions:\n- Feature branches: feat/<task>-<date>-<rand>\n- Never commit to main directly\n- Run type-check, lint, and tests before PR\n- Migrations: always create up + down SQL\n- No secrets in code\n\nCurrent known issues:\n- 4/8 RLS tests failing (team_invites policies need fixing)\n- Coverage thresholds disabled (no unit tests yet)\n- Migration 0070 has commented-out views (dependency issue)",
+  "settings": {
+    "verbose": false,
+    "autoApproveEdits": false,
+    "model": "sonnet"
+  }
+}
+
