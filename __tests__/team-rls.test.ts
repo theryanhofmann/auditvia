@@ -5,6 +5,13 @@
  * Ensures owners/admins can perform actions within their team and others are blocked.
  */
 
+// Override fetch with undici BEFORE importing Supabase (must be synchronous CommonJS require)
+const undici = require('undici')
+global.fetch = undici.fetch
+global.Headers = undici.Headers
+global.Request = undici.Request
+global.Response = undici.Response
+
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321'
@@ -21,53 +28,110 @@ describe('Team RLS Policies', () => {
   
   beforeAll(async () => {
     // Create test users and team
-    const { data: owner } = await adminClient.auth.admin.createUser({
+    const ownerResult = await adminClient.auth.admin.createUser({
       email: 'owner@test.com',
       password: 'password123',
       email_confirm: true
     })
-    ownerUserId = owner?.user?.id!
+    
+    if (ownerResult.error) {
+      console.error('Failed to create owner:', ownerResult.error)
+      throw new Error(`Failed to create owner: ${ownerResult.error.message}`)
+    }
+    
+    ownerUserId = ownerResult.data?.user?.id
+    if (!ownerUserId) {
+      throw new Error('Owner user ID is undefined')
+    }
 
-    const { data: member } = await adminClient.auth.admin.createUser({
+    const memberResult = await adminClient.auth.admin.createUser({
       email: 'member@test.com',
       password: 'password123',
       email_confirm: true
     })
-    memberUserId = member?.user?.id!
+    
+    if (memberResult.error) {
+      console.error('Failed to create member:', memberResult.error)
+      throw new Error(`Failed to create member: ${memberResult.error.message}`)
+    }
+    
+    memberUserId = memberResult.data?.user?.id
+    if (!memberUserId) {
+      throw new Error('Member user ID is undefined')
+    }
 
-    const { data: outsider } = await adminClient.auth.admin.createUser({
+    const outsiderResult = await adminClient.auth.admin.createUser({
       email: 'outsider@test.com',
       password: 'password123',
       email_confirm: true
     })
-    outsiderUserId = outsider?.user?.id!
+    
+    if (outsiderResult.error) {
+      console.error('Failed to create outsider:', outsiderResult.error)
+      throw new Error(`Failed to create outsider: ${outsiderResult.error.message}`)
+    }
+    
+    outsiderUserId = outsiderResult.data?.user?.id
+    if (!outsiderUserId) {
+      throw new Error('Outsider user ID is undefined')
+    }
 
     // Create test team
-    const { data: team } = await adminClient
+    const { data: team, error: teamError } = await adminClient
       .from('teams')
       .insert({ name: 'Test Team', created_by: ownerUserId })
       .select()
       .single()
-    testTeamId = team?.id!
+    
+    if (teamError) {
+      console.error('Failed to create team:', teamError)
+      throw new Error(`Failed to create team: ${teamError.message}`)
+    }
+    
+    testTeamId = team?.id
+    if (!testTeamId) {
+      throw new Error('Team ID is undefined')
+    }
 
     // Add owner
-    await adminClient
+    const { error: ownerMemberError } = await adminClient
       .from('team_members')
       .insert({ team_id: testTeamId, user_id: ownerUserId, role: 'owner' })
+    
+    if (ownerMemberError) {
+      console.error('Failed to add owner to team:', ownerMemberError)
+      throw new Error(`Failed to add owner to team: ${ownerMemberError.message}`)
+    }
 
     // Add member
-    await adminClient
+    const { error: memberError } = await adminClient
       .from('team_members')
       .insert({ team_id: testTeamId, user_id: memberUserId, role: 'member' })
+    
+    if (memberError) {
+      console.error('Failed to add member to team:', memberError)
+      throw new Error(`Failed to add member to team: ${memberError.message}`)
+    }
   })
 
   afterAll(async () => {
-    // Cleanup
-    await adminClient.from('team_members').delete().eq('team_id', testTeamId)
-    await adminClient.from('teams').delete().eq('id', testTeamId)
-    await adminClient.auth.admin.deleteUser(ownerUserId)
-    await adminClient.auth.admin.deleteUser(memberUserId)
-    await adminClient.auth.admin.deleteUser(outsiderUserId)
+    // Cleanup - only if IDs exist
+    if (testTeamId) {
+      await adminClient.from('team_members').delete().eq('team_id', testTeamId)
+      await adminClient.from('teams').delete().eq('id', testTeamId)
+    }
+    
+    if (ownerUserId) {
+      await adminClient.auth.admin.deleteUser(ownerUserId)
+    }
+    
+    if (memberUserId) {
+      await adminClient.auth.admin.deleteUser(memberUserId)
+    }
+    
+    if (outsiderUserId) {
+      await adminClient.auth.admin.deleteUser(outsiderUserId)
+    }
   })
 
   describe('team_invites RLS', () => {
