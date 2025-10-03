@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
-import { AccessibilityScanner } from '../../../../scripts/runA11yScan'
+import { AccessibilityScanner, type ScanResult } from '../../../../scripts/runA11yScan'
 import { runDeepScan, type DeepScanResult } from '../../../../scripts/runDeepScan'
 import { classifyIssue } from '../../../../scripts/scanner/issueTiers'
 import type { Result } from 'axe-core'
@@ -15,6 +15,11 @@ import { scanLifecycleManager } from '@/lib/scan-lifecycle-manager'
 
 // Force Node.js runtime for NextAuth and heavy scan operations
 export const runtime = 'nodejs'
+
+// Extended result type that includes DeepScan results
+interface ExtendedScanResult extends ScanResult {
+  deepScan?: DeepScanResult
+}
 
 interface AuditRequest {
   url: string
@@ -252,8 +257,6 @@ async function runScanJob(
     // Determine if we should use dev fallback based on AUDIT_DEV_MODE
     const auditDevMode = process.env.AUDIT_DEV_MODE === 'true'
     const useRealScan = !auditDevMode
-
-    let results: any
     
     // Race the scan against the timeout
     const scanPromise = (async () => {
@@ -372,7 +375,7 @@ async function runScanJob(
       }
     })()
     
-    results = await Promise.race([scanPromise, timeoutPromise])
+    const results = await Promise.race([scanPromise, timeoutPromise]) as ExtendedScanResult
     console.log(`🧵 [job] Scan completed - scanId: ${scanId}`)
 
     // Update heartbeat - processing results
@@ -387,7 +390,7 @@ async function runScanJob(
         // Check if this is a Deep Scan result
         const isDeepScan = !!results.deepScan
         
-        if (isDeepScan) {
+        if (isDeepScan && results.deepScan) {
           // For Deep Scan, use the enhanced issue data
           const issuePromises = results.deepScan.issues.map((issue: any) => {
             const classification = classifyIssue(issue.rule)

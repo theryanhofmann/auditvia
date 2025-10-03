@@ -80,7 +80,7 @@ export function ScanReportClient({ scanId }: ScanReportClientProps) {
 
   useEffect(() => {
     fetchScanReport()
-  }, [scanId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scanId])
 
   const fetchScanReport = async () => {
     try {

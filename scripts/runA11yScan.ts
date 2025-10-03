@@ -13,7 +13,7 @@ interface ScanOptions {
   }
 }
 
-interface ScanResult {
+export interface ScanResult {
   violations: Result[]
   timestamp: string
   url: string

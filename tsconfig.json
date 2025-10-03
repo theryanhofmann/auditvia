@@ -33,10 +33,12 @@
     "**/*.tsx",
     "next-env.d.ts",
     ".next/types/**/*.ts"
-, "src/app/components/ui/command.tsxjksxz"  ],
+  ],
   "exclude": [
     "node_modules",
     ".next",
-    "supabase/functions"
+    "supabase/functions",
+    "scripts/monitoring.test.ts",
+    "tests/**"
   ]
 }

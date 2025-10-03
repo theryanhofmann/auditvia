@@ -7,7 +7,7 @@
     "smoke-test": "tsx scripts/smoke-test.ts",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "lint": "next lint",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -94,6 +94,7 @@
     "ts-jest": "^29.4.4",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.3",
-    "typescript-eslint": "^8.36.0"
+    "typescript-eslint": "^8.36.0",
+    "undici": "^7.16.0"
   }
 }
