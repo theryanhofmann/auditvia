@@ -92,7 +92,8 @@ export function ProUpgradeButton({
 
   const handleUpgrade = async () => {
     if (!teamId) {
-      toast.error('No team selected')
+      toast.error('No team selected. Please refresh the page and try again.')
+      console.error('💳 [upgrade] No teamId available from TeamContext')
       return
     }
 
@@ -114,10 +115,38 @@ export function ProUpgradeButton({
         body: JSON.stringify({ teamId }),
       })
 
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch (e) {
+        console.error('💳 [upgrade] Failed to parse response JSON:', e)
+        data = { error: 'Invalid server response' }
+      }
+
+      console.log('💳 [upgrade] Checkout response:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        data
+      })
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session')
+        console.error('💳 [upgrade] Checkout failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          teamId,
+          fullResponse: data
+        })
+        
+        // Provide more helpful error messages
+        if (response.status === 403) {
+          throw new Error(`Unable to access team. ${data.error || 'Please make sure you are a team owner or admin.'}`)
+        } else if (response.status === 401) {
+          throw new Error('Please sign in again to continue.')
+        } else {
+          throw new Error(data.error || 'Failed to create checkout session')
+        }
       }
 
       if (data.testMode) {

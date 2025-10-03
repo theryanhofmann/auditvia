@@ -1,142 +1,195 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/app/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/app/types/database'
 import { auth } from '@/auth'
-import { requireProFeature } from '@/lib/pro-features'
+import { verifyScanOwnership } from '@/app/lib/ownership'
+import {
+  generateMarkdownExport,
+  generateCsvExport,
+  generateExportFilename,
+  getExportMimeType
+} from '@/lib/export-scan-report'
+import { scanAnalytics } from '@/lib/safe-analytics'
+
+const MAX_EXPORT_ITEMS = 2000
+
+interface RouteContext {
+  params: Promise<{ scanId: string }>
+}
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { scanId: string } }
+  context: RouteContext
 ) {
-  console.log('📄 [pdf-export] Starting PDF export for scan:', params.scanId)
-  
-  // Verify authentication
-  const session = await auth()
-  if (!session?.user?.id) {
-    return new NextResponse(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401 }
-    )
-  }
+  const startTime = Date.now()
+  const params = await context.params
+  const { scanId } = params
+  const { searchParams } = new URL(request.url)
+  const format = searchParams.get('format') as 'md' | 'csv' | null
 
-  const supabase = await createClient()
-
-  // Get scan with site and team details
-  const { data: scan, error: scanError } = await supabase
-    .from('scans')
-    .select(`
-      id,
-      status,
-      started_at,
-      finished_at,
-      total_violations,
-      passes,
-      incomplete,
-      inapplicable,
-      sites!inner (
-        id,
-        name,
-        url,
-        user_id,
-        team_id,
-        teams!inner (
-          id,
-          name,
-          created_by,
-          created_at,
-          billing_status,
-          stripe_customer_id,
-          stripe_subscription_id,
-          trial_ends_at,
-          is_pro
-        )
-      ),
-      issues (
-        id,
-        rule,
-        selector,
-        severity,
-        impact,
-        description,
-        help_url,
-        html
-      )
-    `)
-    .eq('id', params.scanId)
-    .single()
-
-  if (scanError || !scan) {
-    console.error('📄 [pdf-export] Scan not found:', scanError)
-    return new NextResponse(
-      JSON.stringify({ error: 'Scan not found' }),
-      { status: 404 }
-    )
-  }
-
-  // Verify ownership through team membership
-  const { data: teamMember, error: memberError } = await supabase
-    .from('team_members')
-    .select('role')
-    .eq('team_id', scan.sites[0].team_id)
-    .eq('user_id', session.user.id)
-    .single()
-
-  if (memberError || !teamMember) {
-    console.error('📄 [pdf-export] Access denied:', memberError)
-    return new NextResponse(
-      JSON.stringify({ error: 'Access denied' }),
-      { status: 403 }
-    )
-  }
-
-  // Check Pro feature access
-  const team = scan.sites[0].teams[0]
   try {
-    requireProFeature(team, 'PDF_EXPORT')
-    console.log('📄 [pdf-export] Pro access verified for team:', team.name)
+    console.log(`📤 [export] Starting export for scan: ${scanId}, format: ${format}`)
+
+    // Validate format
+    if (!format || !['md', 'csv'].includes(format)) {
+      return NextResponse.json(
+        { error: 'Invalid format. Use ?format=md or ?format=csv' },
+        { status: 400 }
+      )
+    }
+
+    // Emit telemetry
+    scanAnalytics.track('export_started', { scanId, format })
+
+    // Verify authentication
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userId = session.user.id
+
+    // Initialize Supabase
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // Verify scan ownership (reuses existing ownership checks)
+    const ownershipResult = await verifyScanOwnership(userId, scanId, '📤 [export]')
+    
+    if (!ownershipResult.allowed || !ownershipResult.site) {
+      console.error(`📤 [export] Ownership check failed:`, ownershipResult.error)
+      scanAnalytics.track('export_failed', { scanId, format, errorType: 'unauthorized' })
+      return NextResponse.json(
+        { error: ownershipResult.error?.message || 'Access denied' },
+        { status: ownershipResult.error?.httpStatus || 403 }
+      )
+    }
+
+    const site = ownershipResult.site
+
+    // Fetch scan data
+    const { data: scan, error: scanError } = await supabase
+      .from('scans')
+      .select('id, status, created_at, total_violations, passes, incomplete, inapplicable')
+      .eq('id', scanId)
+      .single()
+
+    if (scanError || !scan) {
+      console.error(`📤 [export] Failed to fetch scan:`, scanError)
+      scanAnalytics.track('export_failed', { scanId, format, errorType: 'scan_not_found' })
+      return NextResponse.json(
+        { error: 'Scan not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check scan status
+    if (scan.status !== 'completed') {
+      console.log(`📤 [export] Scan not completed: ${scan.status}`)
+      scanAnalytics.track('export_failed', { scanId, format, errorType: 'scan_not_completed' })
+      return NextResponse.json(
+        { error: 'Export only available for completed scans' },
+        { status: 400 }
+      )
+    }
+
+    // Fetch issues (limit to MAX_EXPORT_ITEMS)
+    const { data: issues, error: issuesError } = await supabase
+      .from('issues')
+      .select('id, rule, impact, description, help_url, selector, html')
+      .eq('scan_id', scanId)
+      .order('impact', { ascending: false })
+      .limit(MAX_EXPORT_ITEMS)
+
+    if (issuesError) {
+      console.error(`📤 [export] Failed to fetch issues:`, issuesError)
+      scanAnalytics.track('export_failed', { scanId, format, errorType: 'database_error' })
+      return NextResponse.json(
+        { error: 'Failed to fetch scan issues' },
+        { status: 500 }
+      )
+    }
+
+    const truncated = (issues?.length || 0) >= MAX_EXPORT_ITEMS
+    const issueCount = issues?.length || 0
+
+    console.log(`📤 [export] Fetched ${issueCount} issues${truncated ? ' (truncated)' : ''}`)
+
+    // Prepare metadata
+    const metadata = {
+      scanId: scan.id,
+      siteName: site.name || 'Unknown Site',
+      siteUrl: site.url,
+      scanDate: scan.created_at,
+      score: calculateScore(scan),
+      totalViolations: scan.total_violations || 0,
+      passes: scan.passes || 0,
+      incomplete: scan.incomplete || 0,
+      inapplicable: scan.inapplicable || 0
+    }
+
+    // Generate export
+    let content: string
+    if (format === 'md') {
+      content = generateMarkdownExport(issues || [], metadata, truncated)
+    } else {
+      content = generateCsvExport(issues || [], metadata, truncated)
+    }
+
+    // Generate filename
+    const filename = generateExportFilename(site.name || 'unknown-site', scanId, format)
+    const mimeType = getExportMimeType(format)
+
+    const duration = Date.now() - startTime
+    console.log(`📤 [export] Generated ${format.toUpperCase()} export in ${duration}ms`)
+
+    // Emit success telemetry
+    scanAnalytics.track('export_succeeded', {
+      scanId,
+      format,
+      itemCount: issueCount,
+      durationMs: duration
+    })
+
+    // Return file as download
+    return new NextResponse(content, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    })
+
   } catch (error) {
-    console.error('📄 [pdf-export] Pro feature required:', error)
-    return new NextResponse(
-      JSON.stringify({ 
-        error: 'Pro feature required',
-        message: 'PDF export requires a Pro plan. Upgrade to access this feature.',
-        feature: 'PDF_EXPORT'
-      }),
-      { status: 403 }
+    const duration = Date.now() - startTime
+    console.error(`📤 [export] Export failed after ${duration}ms:`, error)
+    
+    scanAnalytics.track('export_failed', {
+      scanId,
+      format: format || 'unknown',
+      errorType: 'internal_error'
+    })
+
+    return NextResponse.json(
+      { error: 'Failed to generate export' },
+      { status: 500 }
     )
   }
+}
 
-  // Generate PDF report data
-  const reportData = {
-    scan: {
-      id: scan.id,
-      status: scan.status,
-      started_at: scan.started_at,
-      finished_at: scan.finished_at,
-      total_violations: scan.total_violations,
-      passes: scan.passes,
-      incomplete: scan.incomplete,
-      inapplicable: scan.inapplicable,
-      site: scan.sites[0]
-    },
-    issues: scan.issues,
-    team: {
-      name: team.name,
-      billing_status: team.billing_status
-    },
-    generated_at: new Date().toISOString(),
-    export_version: '2.0'
-  }
-
-  console.log(`📄 [pdf-export] ✅ Generated report for scan ${scan.id} (${scan.issues.length} issues)`)
-
-  // For now, return JSON (TODO: Implement actual PDF generation)
-  return new NextResponse(
-    JSON.stringify(reportData, null, 2),
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="accessibility-report-${scan.id}.json"`
-      }
-    }
-  )
+/**
+ * Calculate accessibility score
+ */
+function calculateScore(scan: any): number {
+  const totalTests = (scan.passes || 0) + (scan.total_violations || 0) + (scan.incomplete || 0) + (scan.inapplicable || 0)
+  if (totalTests === 0) return 0
+  
+  const successfulTests = (scan.passes || 0) + (scan.inapplicable || 0)
+  const score = Math.round((successfulTests / totalTests) * 100)
+  return Math.max(0, Math.min(100, score))
 }

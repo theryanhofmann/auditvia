@@ -186,6 +186,13 @@ export const scanAnalytics = {
       attempts,
       duration
     })
+  },
+
+  /**
+   * Generic track method for custom events
+   */
+  track: (eventName: string, data: Record<string, any> = {}) => {
+    safeAnalytics(eventName, data)
   }
 }
 

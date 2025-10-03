@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
 import { AccessibilityScanner } from '../../../../scripts/runA11yScan'
+import { runDeepScan, type DeepScanResult } from '../../../../scripts/runDeepScan'
+import { classifyIssue } from '../../../../scripts/scanner/issueTiers'
 import type { Result } from 'axe-core'
 import { sendScanCompletionEmail } from '@/app/lib/email/sendScanCompletionEmail'
 import type { Issue } from '@/app/types/email'
@@ -19,6 +21,7 @@ interface AuditRequest {
   siteId: string
   userId?: string
   waitForSelector?: string
+  scanProfile?: 'quick' | 'standard' | 'deep'
 }
 
 interface ScanResponse {
@@ -68,7 +71,8 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
     console.log('🚀 Starting audit request...')
     
     // Parse request body
-    const { url, siteId, userId, waitForSelector } = await request.json() as AuditRequest
+    // Default to 'deep' scan for comprehensive coverage
+    const { url, siteId, userId, waitForSelector, scanProfile = 'deep' } = await request.json() as AuditRequest
 
     // Validate required fields
     if (!url || !siteId) {
@@ -78,6 +82,8 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
         message: 'Missing required fields: url and siteId'
       }, 400)
     }
+
+    console.log(`📋 Scan profile: ${scanProfile}`)
 
     // Validate team ownership using current session
     const session = await auth()
@@ -164,7 +170,8 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
       site_id: siteId as string,
       user_id: session.user.id,
       status: 'running',
-      progress_message: 'Scan queued for execution'
+      progress_message: 'Scan queued for execution',
+      scan_profile: scanProfile
     })
 
     if (!scanCreationResult.success || !scanCreationResult.scanId) {
@@ -188,10 +195,10 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
       auditDevMode: process.env.AUDIT_DEV_MODE === 'true'
     }
     
-    console.log(`🧵 [job] started - scanId: ${scanId}, siteId: ${siteId}`)
+    console.log(`🧵 [job] started - scanId: ${scanId}, siteId: ${siteId}, profile: ${scanProfile}`)
     
     // Fire and forget the async scan job
-    runScanJob(scanId, url, siteId, session.user.id, waitForSelector).catch(error => {
+    runScanJob(scanId, url, siteId, session.user.id, scanProfile, waitForSelector).catch(error => {
       console.error(`🧵 [job] failed - scanId: ${scanId}:`, error)
     })
 
@@ -212,10 +219,12 @@ async function runScanJob(
   url: string,
   siteId: string,
   userId: string,
+  scanProfile: 'quick' | 'standard' | 'deep' = 'deep',
   waitForSelector?: string
 ): Promise<void> {
   const startTime = Date.now()
-  const SCAN_TIMEOUT_MS = 120000 // 2 minutes max per scan
+  // Adjust timeout based on profile (Deep scans need more time)
+  const SCAN_TIMEOUT_MS = scanProfile === 'deep' ? 180000 : scanProfile === 'standard' ? 150000 : 120000
   
   // Set up timeout guard
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -249,24 +258,86 @@ async function runScanJob(
     // Race the scan against the timeout
     const scanPromise = (async () => {
       if (useRealScan) {
-        // Run the real accessibility scan
-        console.log(`🧵 [job] Running real accessibility scan - scanId: ${scanId}`)
-        await scanLifecycleManager.updateHeartbeat(scanId, 'Launching browser...', userId)
-        
-        const scanner = new AccessibilityScanner()
-        
-        await scanLifecycleManager.updateHeartbeat(scanId, `Navigating to ${url}...`, userId)
-        
-        const result = await scanner.scan({
-          url,
-          waitForSelector,
-          viewport: { width: 1280, height: 720 },
-          timeout: 30000
-        })
-        
-        await scanLifecycleManager.updateHeartbeat(scanId, 'Analyzing accessibility rules...', userId)
-        console.log(`🧵 [job] Real scan completed - scanId: ${scanId}`)
-        return result
+        // Check if we should use Deep Scan (standard or deep profile)
+        if (scanProfile === 'standard' || scanProfile === 'deep') {
+          console.log(`🧵 [job] Running Deep Scan (${scanProfile}) - scanId: ${scanId}`)
+          await scanLifecycleManager.updateHeartbeat(scanId, 'Launching Deep Scan...', userId)
+          
+          // Emit deep_scan_started telemetry
+          scanAnalytics.track('deep_scan_started', {
+            scanId,
+            siteId,
+            userId,
+            profile: scanProfile,
+            url,
+            timestamp: new Date().toISOString()
+          })
+          
+          const result = await runDeepScan({
+            url,
+            scanProfile,
+            timeout: 30000
+          })
+          
+          await scanLifecycleManager.updateHeartbeat(scanId, 'Deep Scan complete, processing results...', userId)
+          console.log(`🧵 [job] Deep Scan completed - ${result.pagesScanned} pages, ${result.statesAudited} states`)
+          
+          // Emit deep_scan_completed telemetry
+          scanAnalytics.track('deep_scan_completed', {
+            scanId,
+            siteId,
+            userId,
+            profile: scanProfile,
+            pagesScanned: result.pagesScanned,
+            statesAudited: result.statesAudited,
+            violationsFound: result.violationsCount,
+            advisoriesFound: result.advisoriesCount,
+            totalIssues: result.totalIssues,
+            duration: result.timeToScan
+          })
+          
+          // Convert Deep Scan result to expected format
+          return {
+            violations: result.issues.map(issue => ({
+              id: issue.rule,
+              impact: issue.impact,
+              nodes: [{
+                target: [issue.selector],
+                html: issue.html,
+                failureSummary: issue.description
+              }],
+              description: issue.description,
+              help: issue.description,
+              helpUrl: issue.helpUrl,
+              tags: issue.wcagTags
+            })),
+            passes: 0, // Not tracked in deep scan
+            incomplete: 0,
+            inapplicable: 0,
+            timeToScan: result.timeToScan * 1000, // Convert to ms
+            // Add deep scan metadata
+            deepScan: result
+          }
+        } else {
+          // Run quick scan (original scanner)
+          console.log(`🧵 [job] Running quick accessibility scan - scanId: ${scanId}`)
+          await scanLifecycleManager.updateHeartbeat(scanId, 'Launching browser...', userId)
+          
+          const scanner = new AccessibilityScanner()
+          
+          await scanLifecycleManager.updateHeartbeat(scanId, `Navigating to ${url}...`, userId)
+          
+          const result = await scanner.scan({
+            url,
+            waitForSelector,
+            viewport: { width: 1280, height: 720 },
+            timeout: 30000
+          })
+          
+          await scanLifecycleManager.updateHeartbeat(scanId, 'Analyzing accessibility rules...', userId)
+          console.log(`🧵 [job] Quick scan completed - scanId: ${scanId}`)
+          return result
+        }
       } else {
         // Use dev fallback with stub data
         console.log(`🧵 [job] Using dev fallback scan - scanId: ${scanId}`)
@@ -309,40 +380,82 @@ async function runScanJob(
 
     // Store violations in the issues table (best effort)
     if (results.violations.length > 0) {
-      console.log(`🧵 [job] Storing ${results.violations.length} violations - scanId: ${scanId}`)
-      await scanLifecycleManager.updateHeartbeat(scanId, `Storing ${results.violations.length} violations...`, userId)
+      console.log(`🧵 [job] Storing ${results.violations.length} issues - scanId: ${scanId}`)
+      await scanLifecycleManager.updateHeartbeat(scanId, `Storing ${results.violations.length} issues...`, userId)
       
       try {
-        const issuePromises = results.violations.map(async (violation: any) => {
-          // Get WCAG rule from tags
-          const wcagTag = violation.tags?.find((tag: string) => tag.startsWith('wcag'))
-          const wcagRule = wcagTag ? `WCAG ${wcagTag.slice(4, -1)}.${wcagTag.slice(-1).toUpperCase()}` : null
-
-          // Process each node in the violation
-          return Promise.all((violation.nodes || []).map((node: any) => 
-            supabase
+        // Check if this is a Deep Scan result
+        const isDeepScan = !!results.deepScan
+        
+        if (isDeepScan) {
+          // For Deep Scan, use the enhanced issue data
+          const issuePromises = results.deepScan.issues.map((issue: any) => {
+            const classification = classifyIssue(issue.rule)
+            
+            return supabase
               .from('issues')
               .insert([{
                 scan_id: scanId,
-                rule: violation.id,
-                selector: Array.isArray(node.target) ? node.target.join(', ') : String(node.target),
-                severity: violation.impact || 'minor',
-                impact: violation.impact,
-                description: violation.description,
-                help_url: violation.helpUrl,
-                html: node.html
+                rule: issue.rule,
+                selector: issue.selector,
+                severity: issue.impact || 'minor',
+                impact: issue.impact,
+                description: issue.description,
+                help_url: issue.helpUrl,
+                html: issue.html,
+                // Deep Scan additions
+                tier: classification.tier,
+                page_url: issue.pageUrl,
+                page_state: issue.pageState,
+                wcag_reference: classification.wcagReference,
+                requires_manual_review: classification.requiresManualReview
               }])
-          ))
-        })
+          })
+          
+          await Promise.all(issuePromises)
+          console.log(`🧵 [job] Deep Scan issues stored with tier classification - scanId: ${scanId}`)
+        } else {
+          // For Quick Scan, use traditional storage
+          const issuePromises = results.violations.map(async (violation: any) => {
+            // Get WCAG rule from tags
+            const wcagTag = violation.tags?.find((tag: string) => tag.startsWith('wcag'))
+            const wcagRule = wcagTag ? `WCAG ${wcagTag.slice(4, -1)}.${wcagTag.slice(-1).toUpperCase()}` : null
+            
+            // Classify the issue
+            const classification = classifyIssue(violation.id)
 
-        await Promise.all(issuePromises.flat())
-        console.log(`🧵 [job] Violations stored - scanId: ${scanId}`)
+            // Process each node in the violation
+            return Promise.all((violation.nodes || []).map((node: any) => 
+              supabase
+                .from('issues')
+                .insert([{
+                  scan_id: scanId,
+                  rule: violation.id,
+                  selector: Array.isArray(node.target) ? node.target.join(', ') : String(node.target),
+                  severity: violation.impact || 'minor',
+                  impact: violation.impact,
+                  description: violation.description,
+                  help_url: violation.helpUrl,
+                  html: node.html,
+                  // Add tier classification for quick scans too
+                  tier: classification.tier,
+                  page_url: url,
+                  page_state: 'default',
+                  wcag_reference: classification.wcagReference,
+                  requires_manual_review: classification.requiresManualReview
+                }])
+            ))
+          })
+
+          await Promise.all(issuePromises.flat())
+          console.log(`🧵 [job] Quick scan issues stored with tier classification - scanId: ${scanId}`)
+        }
       } catch (error) {
-        console.error(`🧵 [job] Error storing violations - scanId: ${scanId}:`, error)
+        console.error(`🧵 [job] Error storing issues - scanId: ${scanId}:`, error)
         // Continue execution - we don't want to fail the whole scan if issue storage fails
       }
     } else {
-      console.log(`🧵 [job] No violations found - scanId: ${scanId}`)
+      console.log(`🧵 [job] No issues found - scanId: ${scanId}`)
     }
 
     // Update scan record with results using lifecycle manager
@@ -350,19 +463,73 @@ async function runScanJob(
     await scanLifecycleManager.updateHeartbeat(scanId, 'Finalizing scan results...', userId)
     
     // First update the scan with results data
-    await updateScanRecordWithRetry(supabase, scanId, {
+    const scanUpdate: any = {
       total_violations: results.violations.length,
       passes: results.passes,
       incomplete: results.incomplete,
       inapplicable: results.inapplicable,
       scan_time_ms: results.timeToScan,
       updated_at: new Date().toISOString()
-    })
+    }
+
+    // Add Deep Scan metadata if applicable
+    if (results.deepScan) {
+      const deepScan = results.deepScan
+      scanUpdate.pages_scanned = deepScan.pagesScanned
+      scanUpdate.states_tested = deepScan.statesAudited
+      scanUpdate.violations_count = deepScan.violationsCount
+      scanUpdate.advisories_count = deepScan.advisoriesCount
+      scanUpdate.scan_metadata = {
+        pages: deepScan.pages.map((p: any) => ({
+          url: p.url,
+          title: p.title,
+          states: p.states.map((s: any) => s.name),
+          violations: p.violations,
+          advisories: p.advisories
+        })),
+        profile: deepScan.scanProfile,
+        platform: deepScan.platform,
+        screenshot: deepScan.screenshot // Store base64 screenshot
+      }
+      console.log(`🧵 [job] ✅ Deep Scan metadata: ${deepScan.pagesScanned} pages, ${deepScan.statesAudited} states, ${deepScan.violationsCount} violations, ${deepScan.advisoriesCount} advisories`)
+      if (deepScan.screenshot) {
+        console.log('📸 [job] Screenshot captured and stored')
+      }
+    
+    } else {
+      // For quick scans, still populate basic metadata
+      scanUpdate.pages_scanned = 1
+      scanUpdate.states_tested = 1
+      scanUpdate.scan_metadata = {
+        pages: [{
+          url: url,
+          states: ['default'],
+          violations: results.violations.length,
+          advisories: 0
+        }],
+        profile: 'quick'
+      }
+    }
+
+    // Add platform info if detected
+    if (results.platform) {
+      scanUpdate.platform = results.platform.name
+      scanUpdate.platform_confidence = results.platform.confidence
+      scanUpdate.platform_detected_from = results.platform.detected_from
+      console.log(`🧵 [job] ✅ Platform detected: ${results.platform.name} (${Math.round(results.platform.confidence * 100)}% confidence)`)
+    } else if (results.deepScan?.platform) {
+      scanUpdate.platform = results.deepScan.platform.name
+      scanUpdate.platform_confidence = results.deepScan.platform.confidence
+      console.log(`🧵 [job] ✅ Platform detected: ${results.deepScan.platform.name} (${Math.round(results.deepScan.platform.confidence * 100)}% confidence)`)
+    }
+
+    await updateScanRecordWithRetry(supabase, scanId, scanUpdate)
     
     // Then transition to completed state
     const transitionResult = await scanLifecycleManager.transitionToTerminal(scanId, 'completed', {
       progressMessage: 'Scan completed successfully',
       userId,
+      siteId,
       results: {
         violations: results.violations.length,
         passes: results.passes,
@@ -433,7 +600,8 @@ async function runScanJob(
     const transitionResult = await scanLifecycleManager.transitionToTerminal(scanId, 'failed', {
       errorMessage,
       progressMessage: 'Scan failed',
-      userId
+      userId,
+      siteId
     })
     
     if (!transitionResult.success) {

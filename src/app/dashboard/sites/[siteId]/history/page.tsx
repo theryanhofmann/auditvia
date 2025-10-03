@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { createClient } from '@/app/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { ScanHistoryClient } from './ScanHistoryClient'
 
 export const metadata = {
@@ -10,38 +10,19 @@ export const metadata = {
 }
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     siteId: string
-  }
-}
-
-type ScanHistoryItem = {
-  id: string
-  created_at: string
-  score: number | null
-  status: string
-  total_violations: number | null
-  issues_count: number | null
-  site: {
-    name: string | null
-    url: string
-  }
-}
-
-type ScanResponse = {
-  id: string
-  created_at: string
-  score: number | null
-  status: string
-  total_violations: number | null
-  issues: { count: number }[]
-  site: Array<{
-    name: string | null
-    url: string
+  }>
+  searchParams?: Promise<{
+    teamId?: string
   }>
 }
 
-export default async function ScanHistoryPage({ params }: RouteParams) {
+export default async function ScanHistoryPage({ params, searchParams }: RouteParams) {
+  // Await params as required by Next.js 15
+  const { siteId } = await params
+  const searchParamsResolved = searchParams ? await searchParams : {}
+  
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id
 
@@ -49,64 +30,67 @@ export default async function ScanHistoryPage({ params }: RouteParams) {
     notFound()
   }
 
-  const supabase = await createClient()
+  // Use service role client to bypass RLS (same as other site pages)
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  
+  // Get teamId from search params
+  const teamId = searchParamsResolved?.teamId
 
-  // First verify the user owns this site
-  const { data: site, error: siteError } = await supabase
-    .from('sites')
-    .select('id, user_id')
-    .eq('id', params.siteId)
-    .single()
+  console.log('📍 [ScanHistory] Route hit:', { siteId, teamId, userId })
 
-  if (siteError || !site) {
+  if (!teamId) {
+    console.error('[ScanHistory] No teamId provided')
     notFound()
   }
 
-  if (site.user_id !== userId) {
-    notFound()
-  }
+  // Verify team membership
+  const { data: membership, error: membershipError } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+    .limit(1)
 
-  // Get scans with issue counts
-  const { data: scans, error: scansError } = await supabase
-    .from('scans')
-    .select(`
-      id,
-      created_at,
-      score,
-      status,
-      total_violations,
-      issues (
-        count
-      ),
-      site:sites!inner (
-        name,
-        url
-      )
-    `)
-    .eq('site_id', params.siteId)
-    .order('created_at', { ascending: false })
-
-  if (scansError) {
-    console.error('Error fetching scans:', scansError)
-    notFound()
-  }
-
-  // Transform the response to include issue counts
-  const processedScans: ScanHistoryItem[] = (scans as unknown as ScanResponse[] || []).map(scan => {
-    const siteData = scan.site?.[0] || { name: null, url: '' }
-    return {
-      id: scan.id,
-      created_at: scan.created_at,
-      score: scan.score,
-      status: scan.status,
-      total_violations: scan.total_violations,
-      issues_count: scan.issues?.length || null,
-      site: {
-        name: siteData.name,
-        url: siteData.url
-      }
-    }
+  console.log('🔍 [ScanHistory] Membership check:', { 
+    found: membership && membership.length > 0, 
+    role: membership?.[0]?.role,
+    error: membershipError?.message 
   })
 
-  return <ScanHistoryClient siteId={params.siteId} />
+  if (!membership || membership.length === 0) {
+    console.error('[ScanHistory] User not member of team')
+    notFound()
+  }
+
+  // Verify the site belongs to this team
+  const { data: site, error: siteError } = await supabase
+    .from('sites')
+    .select('id, team_id, name, url')
+    .eq('id', siteId)
+    .eq('team_id', teamId)
+    .single()
+
+  console.log('🔍 [ScanHistory] Site check:', { 
+    found: !!site, 
+    siteName: site?.name,
+    error: siteError?.message 
+  })
+
+  if (siteError || !site) {
+    console.error('[ScanHistory] Site not found or does not belong to team')
+    notFound()
+  }
+  
+  console.log('✅ [ScanHistory] All checks passed, rendering component')
+
+  // Note: ScanHistoryClient will fetch the scans data itself
+  // We've already verified:
+  // 1. User is authenticated
+  // 2. User is member of the team
+  // 3. Site belongs to this team
+  
+  return <ScanHistoryClient siteId={siteId} />
 } 

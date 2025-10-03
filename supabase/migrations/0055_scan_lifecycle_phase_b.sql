@@ -79,7 +79,9 @@ CREATE TABLE IF NOT EXISTS scan_lifecycle_events (
 CREATE INDEX IF NOT EXISTS idx_scan_lifecycle_events_scan_id ON scan_lifecycle_events (scan_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_scan_lifecycle_events_type ON scan_lifecycle_events (event_type, created_at DESC);
 
--- Create improved cleanup function
+-- Create improved cleanup function (drop old version first to avoid return type conflicts)
+DROP FUNCTION IF EXISTS cleanup_stuck_scans_v2(INTEGER, INTEGER, BOOLEAN);
+
 CREATE OR REPLACE FUNCTION cleanup_stuck_scans_v2(
   max_runtime_minutes INTEGER DEFAULT 15,
   heartbeat_stale_minutes INTEGER DEFAULT 5,

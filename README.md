@@ -1,5 +1,12 @@
 # Auditvia
 
+![Tests](https://github.com/theryanhofmann/auditvia/actions/workflows/test.yml/badge.svg)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green.svg)](https://supabase.com/)
+
+Enterprise accessibility compliance platform with AI-native remediation.
+
 ## Development Setup
 
 ### Prerequisites
@@ -50,16 +57,45 @@ This will:
 - Run RLS policies
 
 ### Running Tests
-- Unit tests: `npm test`
-- E2E tests: `npm run e2e`
-- Smoke tests: `npm run smoke-test`
+
+**Quick start:**
+```bash
+# Setup test environment (first time only)
+./scripts/setup-test-env.sh
+
+# Run all tests
+npm test
+
+# Run specific test suites
+npm run test:integration    # Integration tests with Supabase
+npm run test:watch         # Watch mode for development
+npm run test:coverage      # Generate coverage report
+```
+
+**Available test commands:**
+- `npm test` - Run all tests
+- `npm run test:integration` - Integration tests (RLS policies)
+- `npm run test:watch` - Watch mode
+- `npm run test:coverage` - Coverage report
+- `npm run test:e2e` - E2E tests with Playwright
+- `npm run lint` - ESLint check
+- `npm run type-check` - TypeScript validation
+
+**See [TESTING.md](./TESTING.md) for complete testing guide.**
 
 ### CI/CD
-The following checks run on every PR:
-- Lint: `npm run lint`
-- Type check: `npm run typecheck`
-- Unit tests: `npm test`
-- Smoke tests: `npm run smoke-test`
+
+**Automated pipeline on every push/PR:**
+1. ✅ Lint (ESLint)
+2. ✅ Type Check (TypeScript)
+3. ✅ Unit Tests
+4. ✅ Integration Tests (real Supabase)
+5. ✅ Deploy Preview (PRs)
+6. ✅ Deploy Production (main branch)
+
+**GitHub Actions workflow:** `.github/workflows/test.yml`
+
+**See [.github/CICD_SETUP.md](./.github/CICD_SETUP.md) for setup instructions.**
 
 ### Database Migrations
 See [CONTRIBUTING.md](CONTRIBUTING.md) for migration guidelines.

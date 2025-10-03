@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveCurrentUserAndTeam, getCurrentTeamInfo } from '@/app/lib/resolveCurrentUserAndTeam'
-import { setCurrentTeamId, validateTeamMembership } from '@/app/lib/team-utils'
+import { setCurrentTeamId } from '@/app/lib/team-utils'
+import { resolveTeamForRequest } from '@/lib/team-resolution'
 import { auth } from '@/auth'
+import { cookies } from 'next/headers'
 
 // Force Node.js runtime for NextAuth session support
 export const runtime = 'nodejs'
+
+const TEAM_COOKIE_NAME = 'teamId'
 
 /**
  * GET /api/teams/current - Get the current team for the authenticated user
@@ -25,7 +29,7 @@ export async function GET(): Promise<NextResponse> {
     // Structured logging (dev only)
     if (process.env.NODE_ENV === 'development') {
       console.log('🏛️ [teams/current] Auth check passed:', {
-        appUserId: session.user.id, // This should be app UUID now
+        appUserId: session.user.id,
         email: session.user.email
       })
     }
@@ -55,6 +59,7 @@ export async function GET(): Promise<NextResponse> {
 
 /**
  * POST /api/teams/current - Set the current team for the authenticated user
+ * Uses centralized team resolution to validate membership
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -67,17 +72,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    // Validate user is a member of this team
-    const isValid = await validateTeamMembership(teamId)
-    if (!isValid) {
+    // Use centralized resolution to check if user is member of requested team
+    // IMPORTANT: Pass the requested teamId to validate membership
+    console.log('[teams/current POST] Validating teamId:', teamId)
+    
+    const resolution = await resolveTeamForRequest(teamId, true)
+    
+    console.log('[teams/current POST] Resolution result:', {
+      requested: teamId,
+      resolved: resolution?.teamId,
+      source: resolution?.source,
+      userId: resolution?.userId
+    })
+    
+    if (!resolution) {
+      console.log('[teams/current POST] Resolution failed - no team found')
       return NextResponse.json(
         { error: 'You are not a member of this team' },
         { status: 403 }
       )
     }
 
-    // Set the current team
-    await setCurrentTeamId(teamId)
+    // Check if resolution actually resolved to the requested team
+    // If it resolved to a different team, user is not a member of requested team
+    if (resolution.teamId !== teamId) {
+      console.log('[teams/current POST] Team mismatch - user not member:', {
+        requested: teamId,
+        resolved: resolution.teamId,
+        source: resolution.source
+      })
+      
+      return NextResponse.json(
+        { 
+          error: 'You are not a member of this team',
+          details: `You are not a member of team ${teamId}`
+        },
+        { status: 403 }
+      )
+    }
+    
+    console.log('[teams/current POST] Validation successful - user IS member')
+
+    // User is a member! Set the cookie
+    const cookieStore = await cookies()
+    cookieStore.set(TEAM_COOKIE_NAME, teamId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: '/'
+    })
 
     return NextResponse.json({ success: true, teamId })
   } catch (error) {

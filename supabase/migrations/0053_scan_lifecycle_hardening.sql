@@ -77,12 +77,12 @@ BEGIN
 END $$;
 
 -- Create index for maintenance queries (cleanup stuck scans)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_scans_status_activity 
+CREATE INDEX IF NOT EXISTS idx_scans_status_activity 
   ON scans(status, last_activity_at) 
   WHERE status = 'running';
 
 -- Create index for heartbeat staleness queries
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_scans_heartbeat_staleness 
+CREATE INDEX IF NOT EXISTS idx_scans_heartbeat_staleness 
   ON scans(last_activity_at, status, created_at);
 
 -- Enhanced cleanup function with heartbeat awareness
@@ -218,8 +218,11 @@ BEGIN
       WITH CHECK (true);
   END IF;
 
-  -- Ensure service role can insert violations
-  IF NOT EXISTS (
+  -- Ensure service role can insert violations (only if table exists)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_name = 'violations'
+  ) AND NOT EXISTS (
     SELECT 1 FROM pg_policies 
     WHERE tablename = 'violations' AND policyname = 'service_role_violation_insert'
   ) THEN

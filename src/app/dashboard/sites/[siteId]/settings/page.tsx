@@ -1,22 +1,23 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { createClient } from '@/app/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { notFound, redirect } from 'next/navigation'
 import { SiteSettingsClient } from './SiteSettingsClient'
 import { Breadcrumbs } from '@/app/components/ui/Breadcrumbs'
+import type { Database } from '@/app/types/database'
 
 interface PageProps {
   params: Promise<{
     siteId: string
   }>
-  searchParams: {
+  searchParams: Promise<{
     teamId?: string
-  }
+  }>
 }
 
 export default async function SiteSettingsPage({ params, searchParams }: PageProps) {
   const { siteId } = await params
-  const { teamId } = searchParams
+  const { teamId: queryTeamId } = await searchParams
   
   // Get session for user verification
   const session = await getServerSession(authOptions)
@@ -26,13 +27,32 @@ export default async function SiteSettingsPage({ params, searchParams }: PagePro
     redirect('/login')
   }
 
-  if (!teamId) {
-    redirect('/dashboard')
+  // Use service role to bypass RLS for verification
+  const supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  // First, fetch the site to get its team_id
+  const { data: site, error: siteError } = await supabase
+    .from('sites')
+    .select('id, name, url, team_id, monitoring, custom_domain, created_at, updated_at, github_repo, repository_mode')
+    .eq('id', siteId)
+    .single()
+
+  if (siteError || !site) {
+    console.error('🔧 [site-settings] Site not found:', { 
+      siteId,
+      error: siteError?.message,
+      code: siteError?.code
+    })
+    notFound()
   }
 
-  const supabase = await createClient()
+  // Use the teamId from the site (not from query params)
+  const teamId = site.team_id
 
-  // Verify team membership
+  // Verify user has access to this team
   const { data: teamMember, error: teamError } = await supabase
     .from('team_members')
     .select('role')
@@ -41,56 +61,69 @@ export default async function SiteSettingsPage({ params, searchParams }: PagePro
     .single()
 
   if (teamError || !teamMember) {
-    notFound()
-  }
-
-  // Fetch site data to verify ownership and get site details
-  const { data: site, error: siteError } = await supabase
-    .from('sites')
-    .select('id, name, url, team_id, monitoring, custom_domain, created_at, updated_at')
-    .eq('id', siteId)
-    .eq('team_id', teamId)
-    .single()
-
-  if (siteError || !site) {
+    console.error('🔧 [site-settings] Access denied - not a team member')
     notFound()
   }
 
   const siteName = site.name || site.custom_domain || new URL(site.url).hostname
   const siteUrl = site.url
 
-  return (
-    <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumbs
-        segments={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Scan History', href: `/dashboard/sites/${siteId}` },
-          { label: 'Settings' }
-        ]}
-      />
+  const createdDate = new Date(site.created_at).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
 
+  return (
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-gray-800 pb-6">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-            <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-              {siteName.charAt(0).toUpperCase()}
-            </span>
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          {/* Breadcrumb */}
+          <div className="mb-4">
+            <Breadcrumbs
+              segments={[
+                { label: 'Sites', href: '/dashboard/sites' },
+                { label: 'History', href: `/dashboard/sites/${siteId}/history?teamId=${teamId}` },
+                { label: 'Settings' }
+              ]}
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              Site Settings
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              {siteName} • {siteUrl}
-            </p>
+
+          {/* Title & Meta */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h1 className="text-2xl font-semibold text-gray-900">
+                {siteName}
+              </h1>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-500">URL:</span>
+                  <a 
+                    href={siteUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    {new URL(siteUrl).hostname}
+                  </a>
+                </div>
+                <div className="text-sm text-gray-500">
+                  •
+                </div>
+                <div className="text-sm text-gray-500">
+                  Added {createdDate}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Site Settings Content */}
-      <SiteSettingsClient site={site} />
+      {/* Content */}
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <SiteSettingsClient site={site} />
+      </div>
     </div>
   )
 } 

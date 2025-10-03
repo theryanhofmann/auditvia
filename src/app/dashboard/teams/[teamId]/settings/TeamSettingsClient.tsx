@@ -9,6 +9,7 @@ import { ProUpgradeButton, ProBadge, ProStatusIndicator } from '@/app/components
 import { Button } from '@/app/components/ui/button'
 import { PRO_PLAN, getProFeaturesStatus } from '@/lib/pro-features'
 import { testModeHelpers } from '@/lib/stripe'
+import { TicketProviderSetup } from '@/app/components/ui/TicketProviderSetup'
 
 interface TeamSettingsClientProps {
   team: {
@@ -278,6 +279,23 @@ export function TeamSettingsClient({
               ))}
             </div>
           </div>
+        </section>
+
+        {/* Ticket Integrations Section */}
+        <section className="space-y-4">
+          <div>
+            <h3 className="text-lg font-medium">Ticket Integrations</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Connect GitHub or Jira to create tickets directly from scan results
+            </p>
+          </div>
+          <TicketProviderSetup 
+            teamId={team.id}
+            onSave={() => {
+              toast.success('Integration saved successfully!')
+              router.refresh()
+            }}
+          />
         </section>
 
         {/* Members Section */}

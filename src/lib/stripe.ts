@@ -38,6 +38,18 @@ export const stripeUtils = {
     customerEmail?: string
     customerId?: string
   }) {
+    // Development bypass: return a mock checkout URL
+    if (!stripe && process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ [stripe] Stripe not configured, returning mock checkout URL for development')
+      return {
+        id: 'cs_test_dev_mock_' + Date.now(),
+        url: `${process.env.NEXTAUTH_URL}/dashboard/teams/${params.teamId}/settings?success=true&dev_mock=true&session_id=mock_session_${Date.now()}`,
+        customer: null,
+        mode: 'subscription' as const,
+        status: 'open' as const
+      }
+    }
+    
     if (!stripe) {
       throw new Error('Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.')
     }

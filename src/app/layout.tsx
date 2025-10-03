@@ -2,8 +2,18 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import ClientProviders from './components/providers/ClientProviders'
 import Script from 'next/script'
+import type { Metadata } from 'next'
 
 const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'Auditvia - Accessibility Compliance Made Simple',
+  description: 'Professional accessibility auditing and compliance monitoring for your websites. Automated WCAG scans, detailed reports, and continuous monitoring.',
+  icons: {
+    icon: '/logos/auditvia-icon.svg',
+    apple: '/logos/auditvia-icon.svg',
+  },
+}
 
 export default function RootLayout({
   children,
@@ -29,7 +39,7 @@ export default function RootLayout({
           `}
         </Script>
       </head>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className={`${inter.className} bg-gray-900`} suppressHydrationWarning>
         <ClientProviders>{children}</ClientProviders>
       </body>
     </html>

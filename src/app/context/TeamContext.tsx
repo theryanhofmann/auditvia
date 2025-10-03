@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Team, TeamContextType, TeamContextError } from '@/app/types/teams'
 
 const TeamContext = createContext<TeamContextType | null>(null)
@@ -10,15 +11,43 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   const [team, setTeam] = useState<Team | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     async function initializeTeam() {
       try {
-        // Get current team from server (handles cookie + auto-creation)
+        // Check URL for teamId first
+        const urlTeamId = searchParams?.get('teamId')
+        
+        if (urlTeamId) {
+          // Validate user is member of this team
+          const validateResponse = await fetch('/api/teams/current', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ teamId: urlTeamId })
+          })
+          
+          if (validateResponse.ok) {
+            setTeamIdState(urlTeamId)
+            return
+          }
+        }
+        
+        // Otherwise get current team from server (handles cookie + auto-creation)
         const response = await fetch('/api/teams/current')
         if (response.ok) {
           const data = await response.json()
           setTeamIdState(data.teamId)
+          
+          // Update URL to include teamId if not present
+          if (!urlTeamId && pathname && !pathname.includes('/auth')) {
+            const params = new URLSearchParams(searchParams?.toString())
+            params.set('teamId', data.teamId)
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+          }
         } else {
           // Fallback: fetch user's teams and use first one
           const teamsResponse = await fetch('/api/teams')
@@ -66,11 +95,16 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
         const response = await fetch(`/api/teams/${teamId}`)
         if (!response.ok) {
-          // Handle 403 errors gracefully - user might not be a member of this team
+          // Handle 403/404 errors gracefully
           if (response.status === 403) {
-            console.debug(`🏛️ [team-context] Access denied to team ${teamId} - user not a member (this is normal for report pages)`)
+            console.debug(`🏛️ [team-context] Access denied to team ${teamId} - user not a member`)
             setTeam(null)
             setError(null) // Don't treat 403 as an error
+            return
+          } else if (response.status === 404) {
+            console.debug(`🏛️ [team-context] Team ${teamId} not found - may have been deleted`)
+            setTeam(null)
+            setError(null) // Don't treat 404 as an error
             return
           } else {
             console.error(`🏛️ [team-context] Failed to fetch team details: ${response.status}`)
@@ -114,6 +148,13 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
       
       // Update local state
       setTeamIdState(id)
+      
+      // Update URL to include new teamId
+      if (pathname && !pathname.includes('/auth')) {
+        const params = new URLSearchParams(searchParams?.toString())
+        params.set('teamId', id)
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+      }
     } catch (error) {
       console.error('Error setting team ID:', error)
       setError(error instanceof Error ? error : new Error('Failed to set team'))

@@ -132,6 +132,7 @@ export class ScanLifecycleManager {
       errorMessage?: string
       progressMessage?: string
       userId?: string
+      siteId?: string
       results?: any
     } = {}
   ): Promise<{ success: boolean; error?: string; recoveryAttempts?: RecoveryAttempt[] }> {
@@ -177,15 +178,15 @@ export class ScanLifecycleManager {
           results: metadata.results
         })
 
-        // Analytics
-        if (this.config.enableAnalytics && metadata.userId) {
+        // Analytics - only emit if siteId is available to prevent blank siteId events
+        if (this.config.enableAnalytics && metadata.userId && metadata.siteId) {
           if (status === 'completed') {
-            scanAnalytics.completed(scanId, '', metadata.userId, { 
+            scanAnalytics.completed(scanId, metadata.siteId, metadata.userId, { 
               duration: Date.now() - startTime,
               recovery_attempts: recoveryAttempts.length 
             })
           } else {
-            scanAnalytics.failed(scanId, '', metadata.userId, metadata.errorMessage || 'Unknown error', {
+            scanAnalytics.failed(scanId, metadata.siteId, metadata.userId, metadata.errorMessage || 'Unknown error', {
               recovery_attempts: recoveryAttempts.length
             })
           }
@@ -392,6 +393,7 @@ export class ScanLifecycleManager {
     progress_message?: string
     heartbeat_interval_seconds?: number
     max_runtime_minutes?: number
+    scan_profile?: 'quick' | 'standard' | 'deep'
   }): Promise<{ success: boolean; scanId?: string; error?: string }> {
     try {
       const now = new Date().toISOString()
@@ -405,6 +407,11 @@ export class ScanLifecycleManager {
         status: scanData.status || 'queued',
         created_at: now,
         updated_at: now
+      }
+
+      // Add scan profile if provided
+      if (scanData.scan_profile) {
+        scanPayload.scan_profile = scanData.scan_profile
       }
 
       // Add lifecycle columns ONLY if available

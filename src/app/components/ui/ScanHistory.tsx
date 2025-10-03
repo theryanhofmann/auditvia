@@ -96,7 +96,7 @@ export function ScanHistory({ siteId, className }: ScanHistoryProps) {
           return (
             <button
               key={scan.id}
-              onClick={() => router.push(`/dashboard/reports/${scan.id}`)}
+              onClick={() => router.push(`/dashboard/scans/${scan.id}`)}
               className={cn(
                 "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium",
                 "transition-colors duration-200",

@@ -8,40 +8,64 @@ VALUES (
   ARRAY['application/pdf']
 ) ON CONFLICT (id) DO NOTHING;
 
--- Create RLS policies for PDF reports bucket
-CREATE POLICY "Team members can upload PDF reports"
-ON storage.objects FOR INSERT
-WITH CHECK (
-  bucket_id = 'pdf-reports' AND
-  (storage.foldername(name))[1] IN (
-    SELECT team_id::text FROM team_members 
-    WHERE user_id = auth.uid()
-  )
-);
+-- Create RLS policies for PDF reports bucket (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'storage' 
+    AND tablename = 'objects' 
+    AND policyname = 'Team members can upload PDF reports'
+  ) THEN
+    CREATE POLICY "Team members can upload PDF reports"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+      bucket_id = 'pdf-reports' AND
+      (storage.foldername(name))[1] IN (
+        SELECT team_id::text FROM team_members 
+        WHERE user_id = auth.uid()
+      )
+    );
+  END IF;
 
-CREATE POLICY "Team members can view their PDF reports"
-ON storage.objects FOR SELECT
-USING (
-  bucket_id = 'pdf-reports' AND
-  (storage.foldername(name))[1] IN (
-    SELECT team_id::text FROM team_members 
-    WHERE user_id = auth.uid()
-  )
-);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'storage' 
+    AND tablename = 'objects' 
+    AND policyname = 'Team members can view their PDF reports'
+  ) THEN
+    CREATE POLICY "Team members can view their PDF reports"
+    ON storage.objects FOR SELECT
+    USING (
+      bucket_id = 'pdf-reports' AND
+      (storage.foldername(name))[1] IN (
+        SELECT team_id::text FROM team_members 
+        WHERE user_id = auth.uid()
+      )
+    );
+  END IF;
 
-CREATE POLICY "Team members can delete their PDF reports"
-ON storage.objects FOR DELETE
-USING (
-  bucket_id = 'pdf-reports' AND
-  (storage.foldername(name))[1] IN (
-    SELECT team_id::text FROM team_members 
-    WHERE user_id = auth.uid()
-  )
-);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'storage' 
+    AND tablename = 'objects' 
+    AND policyname = 'Team members can delete their PDF reports'
+  ) THEN
+    CREATE POLICY "Team members can delete their PDF reports"
+    ON storage.objects FOR DELETE
+    USING (
+      bucket_id = 'pdf-reports' AND
+      (storage.foldername(name))[1] IN (
+        SELECT team_id::text FROM team_members 
+        WHERE user_id = auth.uid()
+      )
+    );
+  END IF;
+END $$;
 
 -- Create table to track PDF generation jobs
 CREATE TABLE IF NOT EXISTS pdf_generation_jobs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
@@ -65,28 +89,49 @@ CREATE INDEX IF NOT EXISTS pdf_jobs_created_at_idx ON pdf_generation_jobs(create
 -- Enable RLS on PDF jobs table
 ALTER TABLE pdf_generation_jobs ENABLE ROW LEVEL SECURITY;
 
--- RLS policies for PDF generation jobs
-CREATE POLICY "Users can view their team's PDF jobs"
-ON pdf_generation_jobs FOR SELECT
-USING (
-  team_id IN (
-    SELECT team_id FROM team_members 
-    WHERE user_id = auth.uid()
-  )
-);
+-- RLS policies for PDF generation jobs (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'pdf_generation_jobs' 
+    AND policyname = 'Users can view their team''s PDF jobs'
+  ) THEN
+    CREATE POLICY "Users can view their team's PDF jobs"
+    ON pdf_generation_jobs FOR SELECT
+    USING (
+      team_id IN (
+        SELECT team_id FROM team_members 
+        WHERE user_id = auth.uid()
+      )
+    );
+  END IF;
 
-CREATE POLICY "Users can create PDF jobs for their teams"
-ON pdf_generation_jobs FOR INSERT
-WITH CHECK (
-  team_id IN (
-    SELECT team_id FROM team_members 
-    WHERE user_id = auth.uid()
-  )
-);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'pdf_generation_jobs' 
+    AND policyname = 'Users can create PDF jobs for their teams'
+  ) THEN
+    CREATE POLICY "Users can create PDF jobs for their teams"
+    ON pdf_generation_jobs FOR INSERT
+    WITH CHECK (
+      team_id IN (
+        SELECT team_id FROM team_members 
+        WHERE user_id = auth.uid()
+      )
+    );
+  END IF;
 
-CREATE POLICY "System can update PDF jobs"
-ON pdf_generation_jobs FOR UPDATE
-USING (true); -- Service role can update any job
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'pdf_generation_jobs' 
+    AND policyname = 'System can update PDF jobs'
+  ) THEN
+    CREATE POLICY "System can update PDF jobs"
+    ON pdf_generation_jobs FOR UPDATE
+    USING (true); -- Service role can update any job
+  END IF;
+END $$;
 
 -- Function to clean up old PDF files (run via cron)
 CREATE OR REPLACE FUNCTION cleanup_old_pdf_reports()

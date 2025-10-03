@@ -40,15 +40,23 @@ BEGIN
   END IF;
 END $$;
 
--- Ensure critical indexes exist for performance
-CREATE INDEX CONCURRENTLY IF NOT EXISTS scans_id_idx ON scans(id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS scans_site_id_idx ON scans(site_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS scans_status_idx ON scans(status);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS scans_user_id_idx ON scans(user_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS scans_created_at_idx ON scans(created_at DESC);
+-- Ensure critical indexes exist for performance (without CONCURRENTLY for migrations)
+CREATE INDEX IF NOT EXISTS scans_id_idx ON scans(id);
+CREATE INDEX IF NOT EXISTS scans_site_id_idx ON scans(site_id);
+CREATE INDEX IF NOT EXISTS scans_status_idx ON scans(status);
+CREATE INDEX IF NOT EXISTS scans_user_id_idx ON scans(user_id);
+CREATE INDEX IF NOT EXISTS scans_created_at_idx ON scans(created_at DESC);
 
 -- Remove the RPC function since we use direct table updates
-DROP FUNCTION IF EXISTS update_scan_record CASCADE;
+-- Drop all overloaded versions
+DO $$
+BEGIN
+  DROP FUNCTION IF EXISTS update_scan_record(uuid,text,timestamptz,int,int,int,int,int) CASCADE;
+  DROP FUNCTION IF EXISTS update_scan_record(uuid,int,int,int,int,int,text,timestamptz) CASCADE;
+  DROP FUNCTION IF EXISTS update_scan_record CASCADE;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
 
 -- Add helpful comments for documentation
 COMMENT ON TABLE scans IS 'Accessibility scan records with direct table updates (no RPC)';

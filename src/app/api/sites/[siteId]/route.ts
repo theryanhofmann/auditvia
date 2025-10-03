@@ -105,6 +105,82 @@ export async function PUT(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { siteId: string } }
+) {
+  try {
+    const { siteId } = await params
+
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { github_repo, repository_mode } = body
+
+    // Validate repository_mode if provided
+    if (repository_mode && !['issue_only', 'pr'].includes(repository_mode)) {
+      return NextResponse.json(
+        { error: 'Invalid repository_mode. Must be "issue_only" or "pr"' },
+        { status: 400 }
+      )
+    }
+
+    // Verify site ownership using centralized helper
+    const ownershipResult = await verifySiteOwnership(session.user.id, siteId, '🔧 [sites-patch]')
+    
+    if (!ownershipResult.allowed) {
+      const { error } = ownershipResult
+      return NextResponse.json({ error: error!.message }, { status: error!.httpStatus })
+    }
+
+    // Only admins and owners can edit sites
+    if (!['admin', 'owner'].includes(ownershipResult.role!)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      )
+    }
+
+    console.log(`🔧 [sites-patch] ✅ Site ownership verified - user has role: ${ownershipResult.role}`)
+
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // Build update object with only provided fields
+    const updateData: any = {}
+    if (github_repo !== undefined) updateData.github_repo = github_repo
+    if (repository_mode !== undefined) updateData.repository_mode = repository_mode
+
+    // Update site
+    const { data: site, error: updateError } = await supabase
+      .from('sites')
+      .update(updateData)
+      .eq('id', siteId)
+      .eq('team_id', ownershipResult.site!.team_id)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Failed to update site:', updateError)
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+
+    console.log('✅ Site updated successfully:', updateData)
+    return NextResponse.json({ site })
+  } catch (error) {
+    console.error('Error in PATCH /api/sites/[siteId]:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { siteId: string } }

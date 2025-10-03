@@ -192,7 +192,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
         if (auditResponse.ok && auditData.success && auditData.scanId) {
           // Scan was created successfully, navigate to the running scan page
           toast.success('Site added! Scan is starting...')
-          window.location.href = `/dashboard/reports/${auditData.scanId}`
+          window.location.href = `/dashboard/scans/${auditData.scanId}`
           return // Exit early to prevent form reset and modal close
         } else {
           // Scan API failed or returned success but no scanId
@@ -258,122 +258,152 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
+      <div 
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm" 
+        onClick={handleClose}
+        aria-hidden="true"
+      />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-        {/* Close button */}
-        <button
-          onClick={handleClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
+      <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-lg">
         {/* Header */}
-        <div className="flex items-center mb-6">
-          <Globe className="w-6 h-6 text-blue-500 dark:text-blue-400 mr-3" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Add New Site
-          </h2>
+        <div className="px-6 py-5 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Add New Site
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Start monitoring accessibility for your website
+              </p>
+            </div>
+            <button
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-500 transition-colors"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit}>
-          {/* Site Name */}
-          <div className="mb-4">
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Site Name
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Website"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            />
+        <form onSubmit={handleSubmit} className="px-6 py-5">
+          <div className="space-y-5">
+            {/* Site Name */}
+            <div>
+              <label
+                htmlFor="name"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Site Name
+              </label>
+              <input
+                type="text"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My Website"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            {/* Site URL */}
+            <div>
+              <label
+                htmlFor="url"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Site URL
+              </label>
+              <input
+                type="text"
+                id="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com"
+                className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:border-transparent transition-colors ${
+                  urlError
+                    ? 'border-red-300 focus:ring-red-500'
+                    : 'border-gray-300 focus:ring-blue-500'
+                }`}
+                disabled={isSubmitting}
+              />
+              {urlError && (
+                <div className="mt-2 flex items-start gap-2 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{urlError}</span>
+                </div>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Must start with https://
+              </p>
+            </div>
+
+            {/* Custom Domain (Optional) */}
+            <div>
+              <label
+                htmlFor="customDomain"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Custom Domain <span className="text-gray-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                id="customDomain"
+                value={customDomain}
+                onChange={(e) => setCustomDomain(e.target.value)}
+                placeholder="app.example.com"
+                className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:border-transparent transition-colors ${
+                  customDomainError
+                    ? 'border-red-300 focus:ring-red-500'
+                    : 'border-gray-300 focus:ring-blue-500'
+                }`}
+                disabled={isSubmitting}
+              />
+              {customDomainError && (
+                <div className="mt-2 flex items-start gap-2 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{customDomainError}</span>
+                </div>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                For scanning behind a custom domain or proxy
+              </p>
+            </div>
           </div>
 
-          {/* Site URL */}
-          <div className="mb-4">
-            <label
-              htmlFor="url"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          {/* Actions */}
+          <div className="flex items-center gap-3 mt-6 pt-5 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={isSubmitting}
             >
-              Site URL
-            </label>
-            <input
-              type="text"
-              id="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com"
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
-                urlError
-                  ? 'border-red-500 dark:border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || teamLoading}
+              className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+                isSubmitting || teamLoading
+                  ? 'bg-blue-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
               }`}
-            />
-            {urlError && (
-              <div className="mt-1 flex items-center text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                {urlError}
-              </div>
-            )}
-          </div>
-
-          {/* Custom Domain (Optional) */}
-          <div className="mb-6">
-            <label
-              htmlFor="customDomain"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
-              Custom Domain (Optional)
-            </label>
-            <input
-              type="text"
-              id="customDomain"
-              value={customDomain}
-              onChange={(e) => setCustomDomain(e.target.value)}
-              placeholder="app.example.com"
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
-                customDomainError
-                  ? 'border-red-500 dark:border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              }`}
-            />
-            {customDomainError && (
-              <div className="mt-1 flex items-center text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                {customDomainError}
-              </div>
-            )}
+              {teamLoading
+                ? 'Loading...'
+                : isSubmitting
+                ? currentOperation === 'creating'
+                  ? 'Adding Site...'
+                  : 'Starting Scan...'
+                : 'Add Site'}
+            </button>
           </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isSubmitting || teamLoading}
-            className={`w-full py-2 px-4 rounded-md text-white font-medium ${
-              isSubmitting || teamLoading
-                ? 'bg-blue-400 cursor-not-allowed'
-                : 'bg-blue-500 hover:bg-blue-600'
-            } transition-colors`}
-          >
-            {teamLoading
-              ? 'Loading...'
-              : isSubmitting
-              ? currentOperation === 'creating'
-                ? 'Adding Site...'
-                : 'Starting Scan...'
-              : 'Add Site'}
-          </button>
         </form>
       </div>
     </div>

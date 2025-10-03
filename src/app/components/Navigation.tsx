@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { signIn, signOut, useSession } from 'next-auth/react'
+import { AuditviaLogo } from '@/app/components/AuditviaLogo'
 
 export function Navigation() {
   const { data: session } = useSession()
@@ -11,14 +12,7 @@ export function Navigation() {
     <nav className="relative bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/50 sticky top-0 z-50">
       <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-violet-500/5 to-blue-500/5"></div>
       <div className="relative max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
-        <Link 
-          href="/" 
-          className="group text-2xl font-bold text-white hover:text-blue-300 transition-colors duration-300"
-        >
-          <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent group-hover:from-blue-300 group-hover:to-violet-300 transition-all duration-300">
-            Auditvia
-          </span>
-        </Link>
+        <AuditviaLogo variant="white" size="md" href="/" />
         
         <div className="flex items-center gap-4">
           <Link 

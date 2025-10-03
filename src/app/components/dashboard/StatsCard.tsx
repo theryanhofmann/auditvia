@@ -32,15 +32,13 @@ export function StatsCard({
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
+    <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm hover:shadow-sm transition-shadow">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center space-x-2">
           {Icon && (
-            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
+            <Icon className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
           )}
-          <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">
             {title}
           </h3>
         </div>
@@ -54,13 +52,11 @@ export function StatsCard({
         )}
       </div>
       
-      <div className="mt-4">
-        <div className={`text-2xl font-bold ${valueColor}`}>
-          {value}
-        </div>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-          {description}
-        </div>
+      <div className={`text-2xl font-semibold ${valueColor}`}>
+        {value}
+      </div>
+      <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+        {description}
       </div>
     </div>
   )

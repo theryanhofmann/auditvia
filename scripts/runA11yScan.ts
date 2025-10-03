@@ -22,6 +22,11 @@ interface ScanResult {
   incomplete: number
   inapplicable: number
   timeToScan: number
+  platform?: {
+    name: string
+    confidence: number
+    detected_from: string
+  }
   issues: Array<{
     rule: string
     impact: ImpactValue
@@ -36,6 +41,7 @@ interface ScanResult {
 export class AccessibilityScanner {
   private browser: Browser | null = null
   private page: Page | null = null
+  private platformInfo: any = null
 
   private async initialize() {
     console.log('🚀 Initializing browser...')
@@ -101,6 +107,16 @@ export class AccessibilityScanner {
         })
         console.log('✅ Selector found')
       }
+
+      // Detect platform from page content
+      console.log('🔍 Detecting platform...')
+      const { detectPlatformFromPage } = await import('../src/lib/platform-detector')
+      this.platformInfo = await detectPlatformFromPage(this.page)
+      console.log('✅ Platform detected:', {
+        platform: this.platformInfo.platform,
+        confidence: this.platformInfo.confidence,
+        detected_from: this.platformInfo.detected_from
+      })
 
       // Take a screenshot for verification (during development)
       await this.page.screenshot({ path: 'scan-verification.png' })
@@ -185,6 +201,11 @@ export class AccessibilityScanner {
         incomplete: results.incomplete.length,
         inapplicable: results.inapplicable.length,
         timeToScan: Date.now() - startTime,
+        platform: this.platformInfo ? {
+          name: this.platformInfo.platform,
+          confidence: this.platformInfo.confidence,
+          detected_from: this.platformInfo.detected_from
+        } : undefined,
         issues: results.violations.flatMap(violation => 
           violation.nodes.map(node => ({
             rule: violation.id,
@@ -198,6 +219,7 @@ export class AccessibilityScanner {
         )
       }
 
+      console.log('📦 Scan result prepared with platform:', scanResult.platform)
       return scanResult
 
     } catch (error) {

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/app/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { auth } from '@/auth'
+import { resolveTeamForRequest, getCookieTeamId, logTeamResolution } from '@/lib/team-resolution'
+import type { Database } from '@/app/types/database'
 
 // Force Node.js runtime for NextAuth session support
 export const runtime = 'nodejs'
@@ -13,6 +16,8 @@ interface RouteParams {
 
 /**
  * GET /api/teams/[id] - Get details for a specific team
+ * 
+ * Logs debug info: userId, requested teamId, cookie teamId, resolved teamId, allow/deny
  */
 export async function GET(
   request: NextRequest,
@@ -27,39 +32,92 @@ export async function GET(
       )
     }
 
-    const { id: teamId } = await params
-    if (!teamId) {
+    const { id: requestedTeamId } = await params
+    if (!requestedTeamId) {
       return NextResponse.json(
         { error: 'Team ID is required' },
         { status: 400 }
       )
     }
 
-    const supabase = await createClient()
+    // Resolve team using centralized logic
+    const resolution = await resolveTeamForRequest(requestedTeamId, true)
+    const cookieTeamId = await getCookieTeamId()
 
-    // First verify the user is a member of this team
-    const { data: membership, error: membershipError } = await supabase
-      .from('team_members')
-      .select('role')
-      .eq('team_id', teamId)
-      .eq('user_id', session.user.id)
-      .single()
+    if (!resolution) {
+      // Log denial
+      logTeamResolution('GET /api/teams/[id]', {
+        userId: session.user.id,
+        requestedTeamId,
+        cookieTeamId,
+        resolvedTeamId: 'none',
+        source: 'none',
+        allowed: false,
+        denyReason: 'Resolution failed or user not member'
+      })
 
-    if (membershipError || !membership) {
       return NextResponse.json(
-        { error: 'You are not a member of this team' },
+        { 
+          error: 'not_team_member', 
+          teamId: requestedTeamId,
+          userId: session.user.id
+        },
         { status: 403 }
       )
     }
 
-    // Get team details
+    // Check for team ID mismatch (requested != resolved)
+    if (requestedTeamId !== resolution.teamId) {
+      logTeamResolution('GET /api/teams/[id]', {
+        userId: resolution.userId,
+        requestedTeamId,
+        cookieTeamId,
+        resolvedTeamId: resolution.teamId,
+        source: resolution.source,
+        allowed: false,
+        denyReason: 'Team ID mismatch'
+      })
+
+      return NextResponse.json(
+        { 
+          error: 'team_id_mismatch',
+          requestedTeamId,
+          resolvedTeamId: resolution.teamId,
+          cookieTeamId
+        },
+        { status: 409 }
+      )
+    }
+
+    // Log successful access
+    logTeamResolution('GET /api/teams/[id]', {
+      userId: resolution.userId,
+      requestedTeamId,
+      cookieTeamId,
+      resolvedTeamId: resolution.teamId,
+      source: resolution.source,
+      allowed: true
+    })
+
+    // Get team details using service role (bypass RLS since we've validated membership)
+    const supabase = createServiceClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    
     const { data: team, error: teamError } = await supabase
       .from('teams')
       .select('*')
-      .eq('id', teamId)
+      .eq('id', resolution.teamId)
       .single()
 
     if (teamError || !team) {
+      console.error('[team-access] Team query failed:', {
+        teamId: resolution.teamId,
+        error: teamError?.message,
+        code: teamError?.code
+      })
+      
       return NextResponse.json(
         { error: 'Team not found' },
         { status: 404 }
@@ -68,7 +126,7 @@ export async function GET(
 
     return NextResponse.json({
       ...team,
-      userRole: membership.role
+      userRole: resolution.role
     })
 
   } catch (error) {

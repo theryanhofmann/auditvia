@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Globe, Loader2 } from 'lucide-react'
+import { ArrowRight, Globe, Loader2, Settings } from 'lucide-react'
 import { cn } from '@/app/lib/utils'
 import toast from 'react-hot-toast'
 import { ScanHistory } from './ScanHistory'
@@ -50,6 +50,7 @@ export function SiteCard({
 
     try {
       setIsScanning(true)
+      
       const response = await fetch('/api/audit', {
         method: 'POST',
         headers: {
@@ -57,7 +58,8 @@ export function SiteCard({
         },
         body: JSON.stringify({
           siteId: id,
-          url
+          url,
+          scanProfile: 'deep' // Always use deep scan
         }),
       })
 
@@ -85,11 +87,16 @@ export function SiteCard({
         throw new Error(errorMessage)
       }
 
-      console.log(`🔍 [SiteCard] ✅ Scan created successfully, navigating to: /dashboard/reports/${data.scanId}`)
+      console.log(`🔍 [SiteCard] ✅ Scan created successfully, navigating to: /dashboard/scans/${data.scanId}`)
       
       // Navigate to the new scan report
-      router.push(`/dashboard/reports/${data.scanId}`)
+      const targetUrl = `/dashboard/scans/${data.scanId}`
+      console.log(`🔍 [SiteCard] Calling router.push with: ${targetUrl}`)
+      router.push(targetUrl)
       toast.success('Scan started successfully')
+      
+      // Debug: log after router.push
+      console.log(`🔍 [SiteCard] router.push called, should be navigating...`)
     } catch (error) {
       console.error('Error starting scan:', error)
 
@@ -188,13 +195,21 @@ export function SiteCard({
             )}
           </div>
 
-          {/* Scan Button */}
-          <div className="mt-4 flex justify-end">
+          {/* Action Buttons */}
+          <div className="mt-4 flex gap-2">
+            <Link
+              href={`/dashboard/sites/${id}/settings`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </Link>
             <button
               onClick={runScan}
               disabled={isScanning}
               className={cn(
-                "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                "flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
                 "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800",
                 isScanning
                   ? "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed"
@@ -207,7 +222,7 @@ export function SiteCard({
                   Running...
                 </>
               ) : (
-                'Run New Scan'
+                'Run Scan'
               )}
             </button>
           </div>

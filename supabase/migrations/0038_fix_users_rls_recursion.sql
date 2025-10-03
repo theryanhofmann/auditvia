@@ -4,22 +4,34 @@
 -- Drop existing problematic policies that cause recursion
 DROP POLICY IF EXISTS "Users can read team member info" ON users;
 
--- Create a simple service role policy for server operations
-CREATE POLICY "Service role can manage all users"
-  ON users
-  FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
+-- Create a simple service role policy for server operations (only if it doesn't exist)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'users' 
+    AND policyname = 'Service role can manage all users'
+  ) THEN
+    CREATE POLICY "Service role can manage all users"
+      ON users
+      FOR ALL
+      TO service_role
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
 
--- Allow users to read their own data (simple, no recursion)
+-- Drop and recreate read policy
+DROP POLICY IF EXISTS "Users can read their own data" ON users;
 CREATE POLICY "Users can read their own data"
   ON users
   FOR SELECT
   TO authenticated
   USING (auth.uid()::text = github_id);
 
--- Allow users to update their own data (simple, no recursion)  
+-- Drop and recreate update policy
+DROP POLICY IF EXISTS "Users can update their own data" ON users;
 CREATE POLICY "Users can update their own data"
   ON users
   FOR UPDATE

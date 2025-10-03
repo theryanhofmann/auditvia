@@ -17,16 +17,22 @@ import Link from 'next/link'
 import { toast } from 'react-hot-toast'
 import { useSession } from 'next-auth/react'
 import { useTeam } from '@/app/context/TeamContext'
+import { calculateVerdict, type VerdictResult } from '@/lib/verdict-system'
 
 interface Scan {
   id: string
-  score: number | null
   status: string
-  started_at: string
-  finished_at: string | null
   created_at: string
-  public: boolean
-  team_id: string
+  finished_at: string | null
+  total_violations: number
+  severity?: {
+    critical: number
+    serious: number
+    moderate: number
+    minor: number
+  }
+  team_id?: string
+  public?: boolean
 }
 
 interface ScanHistoryClientProps {
@@ -40,20 +46,43 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const getScoreColor = (score: number | null) => {
-    if (!score) return "text-gray-800 dark:text-gray-100"
-    if (score >= 90) return "text-green-800 dark:text-green-100"
-    if (score >= 70) return "text-blue-800 dark:text-blue-100"
-    if (score >= 50) return "text-yellow-800 dark:text-yellow-100"
-    return "text-red-800 dark:text-red-100"
+  const getVerdictColor = (verdict: VerdictResult) => {
+    switch (verdict.status) {
+      case 'compliant':
+        return "text-green-800 dark:text-green-100"
+      case 'at-risk':
+        return "text-amber-800 dark:text-amber-100"
+      case 'non-compliant':
+        return "text-red-800 dark:text-red-100"
+      default:
+        return "text-gray-800 dark:text-gray-100"
+    }
   }
 
-  const getScoreBg = (score: number | null) => {
-    if (!score) return "bg-gray-100 dark:bg-gray-800"
-    if (score >= 90) return "bg-green-100 dark:bg-green-900"
-    if (score >= 70) return "bg-blue-100 dark:bg-blue-900"
-    if (score >= 50) return "bg-yellow-100 dark:bg-yellow-900"
-    return "bg-red-100 dark:bg-red-900"
+  const getVerdictBg = (verdict: VerdictResult) => {
+    switch (verdict.status) {
+      case 'compliant':
+        return "bg-green-100 dark:bg-green-900"
+      case 'at-risk':
+        return "bg-amber-100 dark:bg-amber-900"
+      case 'non-compliant':
+        return "bg-red-100 dark:bg-red-900"
+      default:
+        return "bg-gray-100 dark:bg-gray-800"
+    }
+  }
+
+  const getVerdictIcon = (verdict: VerdictResult) => {
+    switch (verdict.status) {
+      case 'compliant':
+        return <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+      case 'at-risk':
+        return <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+      case 'non-compliant':
+        return <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+      default:
+        return <AlertTriangle className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -102,21 +131,22 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
       setIsLoading(true)
       setError(null)
 
-      const response = await fetch(`${window.location.origin}/api/scans/site/${siteId}?teamId=${teamId}`)
+      const response = await fetch(`${window.location.origin}/api/sites/${siteId}/scans?teamId=${teamId}`)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-      const data: Scan[] = await response.json()
+      const data = await response.json()
+      const scansData: Scan[] = data.scans || []
 
       if (process.env.NODE_ENV === 'development') {
         console.log('📊 Fetched scans:', {
-          count: data.length,
-          latestScan: data[0],
+          count: scansData.length,
+          latestScan: scansData[0],
           teamId
         })
       }
 
-      setScans(data)
+      setScans(scansData)
     } catch (error) {
       console.error('Error fetching scans:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch scan history')
@@ -234,7 +264,7 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
                   Scan Date
                 </th>
                 <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Score
+                  Compliance
                 </th>
                 <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Status
@@ -252,9 +282,12 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {scans.map((scan) => {
-                const startTime = new Date(scan.started_at)
                 const endTime = scan.finished_at ? new Date(scan.finished_at) : null
-                const duration = endTime ? Math.round((endTime.getTime() - startTime.getTime()) / 1000) : null
+                const duration = endTime ? Math.round((endTime.getTime() - new Date(scan.created_at).getTime()) / 1000) : null
+
+                // Calculate verdict from severity breakdown
+                const severity = scan.severity || { critical: 0, serious: 0, moderate: 0, minor: 0 }
+                const verdict = calculateVerdict(severity.critical, severity.serious, severity.moderate, severity.minor)
 
                 return (
                   <tr key={scan.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
@@ -267,11 +300,22 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreBg(scan.score)}`}>
-                        <span className={getScoreColor(scan.score)}>
-                          {scan.score !== null ? `${scan.score}/100` : 'N/A'}
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getVerdictBg(verdict)}`}>
+                        {getVerdictIcon(verdict)}
+                        <span className={getVerdictColor(verdict)}>
+                          {verdict.title}
                         </span>
                       </div>
+                      {(severity.critical > 0 || severity.serious > 0) && (
+                        <div className="flex gap-1.5 mt-1">
+                          {severity.critical > 0 && (
+                            <span className="text-xs text-red-600 dark:text-red-400">{severity.critical} Critical</span>
+                          )}
+                          {severity.serious > 0 && (
+                            <span className="text-xs text-orange-600 dark:text-orange-400">{severity.serious} Serious</span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center">
@@ -302,7 +346,7 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
                       <div className="flex items-center space-x-2">
                         {scan.status === 'completed' && (
                           <Link
-                            href={`/dashboard/reports/${scan.id}`}
+                            href={`/dashboard/scans/${scan.id}`}
                             className="inline-flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 transition-colors"
                           >
                             <Eye className="w-3 h-3" />

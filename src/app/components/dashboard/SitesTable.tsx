@@ -179,7 +179,7 @@ export function SitesTable({ sites: initialSites, onSiteDeleted, onMonitoringTog
       }
 
       toast.success('Audit started successfully');
-      router.push(`/dashboard/reports/${data.data.scan.id}`);
+      router.push(`/dashboard/scans/${data.data.scan.id}`);
     } catch (error) {
       console.error('Error starting audit:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to start audit');

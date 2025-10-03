@@ -4,8 +4,15 @@ export type Team = Database['public']['Tables']['teams']['Row']
 
 /**
  * Check if a team has Pro access
+ * In development, always returns true for easy testing
  */
 export function isProTeam(team: Team | null | undefined): boolean {
+  // Development bypass: always grant Pro access in dev mode
+  if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEV_PRO_BYPASS === 'true') {
+    console.log('🔓 [pro-features] Dev mode bypass: granting Pro access')
+    return true
+  }
+  
   if (!team) return false
   return team.billing_status === 'pro' || team.is_pro === true
 }

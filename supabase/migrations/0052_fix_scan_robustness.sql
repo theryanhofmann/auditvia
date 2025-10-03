@@ -59,14 +59,14 @@ WHERE status = 'running'
   AND created_at < NOW() - INTERVAL '15 minutes'
   AND ended_at IS NULL;
 
--- Create optimized indexes for scan queries (idempotent)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_scans_site_created_desc 
+-- Create optimized indexes for scan queries (without CONCURRENTLY for migrations)
+CREATE INDEX IF NOT EXISTS idx_scans_site_created_desc 
   ON scans(site_id, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_scans_status_created 
+CREATE INDEX IF NOT EXISTS idx_scans_status_created 
   ON scans(status, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_scans_user_created 
+CREATE INDEX IF NOT EXISTS idx_scans_user_created 
   ON scans(user_id, created_at DESC);
 
 -- Add function to clean up stuck scans (for maintenance utility)

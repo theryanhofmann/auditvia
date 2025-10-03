@@ -39,10 +39,19 @@ export async function GET(
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Fetch scans for the site (updated column names)
+    // Fetch scans for the site with severity breakdown
     const { data: scans, error: scansError } = await supabase
       .from('scans')
-      .select('id, created_at, total_violations, status, finished_at')
+      .select(`
+        id,
+        created_at,
+        total_violations,
+        status,
+        finished_at,
+        issues (
+          impact
+        )
+      `)
       .eq('site_id', siteId)
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -52,7 +61,30 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch scans' }, { status: 500 })
     }
 
-    return NextResponse.json({ scans: scans || [] })
+    // Calculate severity breakdown for each scan
+    const scansWithSeverity = (scans || []).map((scan: any) => {
+      const issues = scan.issues || []
+      const critical = issues.filter((i: any) => i.impact === 'critical').length
+      const serious = issues.filter((i: any) => i.impact === 'serious').length
+      const moderate = issues.filter((i: any) => i.impact === 'moderate').length
+      const minor = issues.filter((i: any) => i.impact === 'minor').length
+
+      return {
+        id: scan.id,
+        created_at: scan.created_at,
+        total_violations: scan.total_violations,
+        status: scan.status,
+        finished_at: scan.finished_at,
+        severity: {
+          critical,
+          serious,
+          moderate,
+          minor
+        }
+      }
+    })
+
+    return NextResponse.json({ scans: scansWithSeverity })
   } catch (error) {
     console.error('Error in GET /api/sites/[siteId]/scans:', error)
     return NextResponse.json(
