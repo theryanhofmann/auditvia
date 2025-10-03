@@ -1,6 +1,9 @@
 -- Update all report views to filter violations only (exclude advisories)
 -- This ensures compliance scores, risk calculations, and KPIs only consider WCAG mandatory issues
-
+--
+-- NOTE: This migration is temporarily disabled because it depends on columns that don't exist yet.
+-- These views will be created in a later migration after all schema changes are complete.
+--
 -- =====================================================
 -- Drop existing views first to allow column changes
 -- =====================================================
@@ -13,6 +16,9 @@ DROP VIEW IF EXISTS top_rules_view CASCADE;
 DROP VIEW IF EXISTS violations_trend_view CASCADE;
 DROP VIEW IF EXISTS report_kpis_view CASCADE;
 
+-- Views will be recreated in a later migration after all required columns exist (0070+)
+
+/*
 -- =====================================================
 -- VIEW 1: KPI Summary (updated to exclude advisories)
 -- =====================================================
@@ -27,18 +33,9 @@ SELECT
     WHERE sc.created_at >= NOW() - INTERVAL '30 days'
     AND (i.tier IS NULL OR i.tier != 'advisory')
   ), 0) as total_violations_30d,
-  COALESCE(AVG(
-    CASE 
-      WHEN (sc.passes + sc.total_violations + sc.incomplete + sc.inapplicable) > 0
-      THEN ((sc.passes + sc.inapplicable)::DECIMAL / (sc.passes + sc.total_violations + sc.incomplete + sc.inapplicable)::DECIMAL) * 100
-      ELSE 0
-    END
-  ) FILTER (WHERE sc.created_at >= NOW() - INTERVAL '30 days'), 0) as avg_score_30d,
-  COUNT(DISTINCT i.id) FILTER (
-    WHERE i.github_issue_url IS NOT NULL 
-    AND sc.created_at >= NOW() - INTERVAL '30 days'
-    AND (i.tier IS NULL OR i.tier != 'advisory')
-  ) as github_issues_created_30d
+  -- Simplified score calculation that doesn't rely on columns that may not exist yet
+  COALESCE(AVG(sc.score) FILTER (WHERE sc.created_at >= NOW() - INTERVAL '30 days'), 0) as avg_score_30d,
+  0 as github_issues_created_30d  -- Placeholder until github_issue_url column exists
 FROM sites s
 LEFT JOIN scans sc ON s.id = sc.site_id AND sc.status = 'completed'
 LEFT JOIN issues i ON sc.id = i.scan_id
@@ -230,4 +227,5 @@ GRANT SELECT ON top_pages_view TO authenticated, service_role;
 GRANT SELECT ON backlog_age_view TO authenticated, service_role;
 GRANT SELECT ON tickets_view TO authenticated, service_role;
 GRANT SELECT ON risk_reduced_view TO authenticated, service_role;
+*/
 

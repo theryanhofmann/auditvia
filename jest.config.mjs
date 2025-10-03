@@ -13,8 +13,7 @@ export default {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
-  setupFiles: ['<rootDir>/scripts/test/setup.ts'],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  setupFiles: ['<rootDir>/scripts/test/setup.ts', '<rootDir>/jest.setup.js'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
