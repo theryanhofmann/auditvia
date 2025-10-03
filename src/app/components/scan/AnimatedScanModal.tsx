@@ -349,6 +349,7 @@ export function AnimatedScanModal({
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="text-blue-200 hover:text-white transition-colors"
             >
@@ -611,6 +612,7 @@ export function AnimatedScanModal({
               {/* Main CTA - View Full Report */}
               <div className="mb-8">
                 <button 
+                  type="button"
                   onClick={() => {
                     if (scanId) window.location.href = `/dashboard/scans/${scanId}`
                   }}
@@ -760,6 +762,7 @@ export function AnimatedScanModal({
               {categories.length > 0 && (
                 <div className="mt-8">
                   <button
+                    type="button"
                     onClick={() => {
                       if (scanId) window.location.href = `/dashboard/scans/${scanId}`
                     }}
