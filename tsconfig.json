@@ -39,6 +39,10 @@
     ".next",
     "supabase/functions",
     "scripts/monitoring.test.ts",
-    "tests/**"
+    "scripts/test/**",
+    "tests/**",
+    "__tests__/**",
+    "jest.setup.js",
+    "jest.config.mjs"
   ]
 }
