@@ -3,7 +3,7 @@
  * Tests for modal trigger logic and behavior
  */
 
-import { isEnterpriseGatingEnabled } from '@/lib/feature-flags'
+import { isEnterpriseGatingEnabled, isScanProfilesEnabled } from '@/lib/feature-flags'
 
 // Mock feature flags
 jest.mock('@/lib/feature-flags', () => ({
@@ -16,61 +16,80 @@ describe('Enterprise Modal Integration', () => {
     jest.clearAllMocks()
   })
 
-  describe('Feature Flag Gating', () => {
-    it('should have enterprise gating flag enabled', () => {
-      expect(isEnterpriseGatingEnabled()).toBe(true)
+  describe('Feature Flag Gating - Dual Flags Required', () => {
+    it('should require BOTH feature flags enabled', () => {
+      const shouldShow = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      expect(shouldShow).toBe(true)
     })
 
-    it('should disable modal when feature flag is false', () => {
+    it('should disable modal when enterprise gating flag is false', () => {
       const mockIsEnterpriseGatingEnabled = isEnterpriseGatingEnabled as jest.Mock
       mockIsEnterpriseGatingEnabled.mockReturnValue(false)
 
-      expect(isEnterpriseGatingEnabled()).toBe(false)
+      const shouldShow = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      expect(shouldShow).toBe(false)
     })
 
-    it('should enable modal when feature flag is true', () => {
-      const mockIsEnterpriseGatingEnabled = isEnterpriseGatingEnabled as jest.Mock
-      mockIsEnterpriseGatingEnabled.mockReturnValue(true)
+    it('should disable modal when scan profiles flag is false', () => {
+      const mockIsScanProfilesEnabled = isScanProfilesEnabled as jest.Mock
+      mockIsScanProfilesEnabled.mockReturnValue(false)
 
-      expect(isEnterpriseGatingEnabled()).toBe(true)
+      const shouldShow = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      expect(shouldShow).toBe(false)
+    })
+
+    it('should enable modal only when both flags are true', () => {
+      const mockIsEnterpriseGatingEnabled = isEnterpriseGatingEnabled as jest.Mock
+      const mockIsScanProfilesEnabled = isScanProfilesEnabled as jest.Mock
+
+      mockIsEnterpriseGatingEnabled.mockReturnValue(true)
+      mockIsScanProfilesEnabled.mockReturnValue(true)
+
+      const shouldShow = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      expect(shouldShow).toBe(true)
     })
   })
 
   describe('Modal Trigger Logic', () => {
-    it('should trigger on incomplete_enterprise_gate status', () => {
+    it('should trigger on incomplete_enterprise_gate status with both flags', () => {
       const status = 'incomplete_enterprise_gate'
-      const shouldShow = isEnterpriseGatingEnabled() && status === 'incomplete_enterprise_gate'
+      const flagsEnabled = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      const shouldShow = flagsEnabled && status === 'incomplete_enterprise_gate'
 
       expect(shouldShow).toBe(true)
     })
 
     it('should not trigger on completed status', () => {
       const status = 'completed'
-      const shouldShow = isEnterpriseGatingEnabled() && status === 'incomplete_enterprise_gate'
+      const flagsEnabled = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      const shouldShow = flagsEnabled && status === 'incomplete_enterprise_gate'
 
       expect(shouldShow).toBe(false)
     })
 
     it('should not trigger on running status', () => {
       const status = 'running'
-      const shouldShow = isEnterpriseGatingEnabled() && status === 'incomplete_enterprise_gate'
+      const flagsEnabled = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      const shouldShow = flagsEnabled && status === 'incomplete_enterprise_gate'
 
       expect(shouldShow).toBe(false)
     })
 
     it('should not trigger on failed status', () => {
       const status = 'failed'
-      const shouldShow = isEnterpriseGatingEnabled() && status === 'incomplete_enterprise_gate'
+      const flagsEnabled = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      const shouldShow = flagsEnabled && status === 'incomplete_enterprise_gate'
 
       expect(shouldShow).toBe(false)
     })
 
-    it('should not trigger when feature flag disabled even with correct status', () => {
+    it('should not trigger when any feature flag disabled even with correct status', () => {
       const mockIsEnterpriseGatingEnabled = isEnterpriseGatingEnabled as jest.Mock
       mockIsEnterpriseGatingEnabled.mockReturnValue(false)
 
       const status = 'incomplete_enterprise_gate'
-      const shouldShow = isEnterpriseGatingEnabled() && status === 'incomplete_enterprise_gate'
+      const flagsEnabled = isEnterpriseGatingEnabled() && isScanProfilesEnabled()
+      const shouldShow = flagsEnabled && status === 'incomplete_enterprise_gate'
 
       expect(shouldShow).toBe(false)
     })

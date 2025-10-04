@@ -24,8 +24,8 @@ import { AISuggestionsPanel } from '@/app/components/scan/AISuggestionsPanel'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { EnterpriseGateModal } from '@/app/components/ui/EnterpriseGateModal'
-import { isEnterpriseGatingEnabled } from '@/lib/feature-flags'
+import { EnterpriseGateModal, SAMPLE_REPORT_ANCHOR } from '@/app/components/ui/EnterpriseGateModal'
+import { isEnterpriseGatingEnabled, isScanProfilesEnabled } from '@/lib/feature-flags'
 
 interface Issue {
   id: string
@@ -148,8 +148,13 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
   }, [teamId, scan.team_id, teamLoading, router])
 
   // Trigger enterprise gate modal on incomplete_enterprise_gate status
+  // Require BOTH feature flags
   useEffect(() => {
-    if (isEnterpriseGatingEnabled() && scan.status === 'incomplete_enterprise_gate') {
+    if (
+      isEnterpriseGatingEnabled() &&
+      isScanProfilesEnabled() &&
+      scan.status === 'incomplete_enterprise_gate'
+    ) {
       setShowEnterpriseModal(true)
     }
   }, [scan.status])
@@ -532,7 +537,11 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
 
       {/* Issues Summary */}
       {Object.keys(groupedIssues).length > 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
+        <div
+          id={SAMPLE_REPORT_ANCHOR}
+          tabIndex={-1}
+          className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+        >
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Issues Summary
           </h2>
@@ -587,10 +596,12 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
         open={showEnterpriseModal}
         onOpenChange={setShowEnterpriseModal}
         onViewSampleReport={() => {
-          // Show coverage summary with top 20-50 URLs
-          toast.success('Sample report with top URLs displayed')
+          // Callback is optional - deep link handled in modal
+          toast.success('Viewing sample report')
         }}
         discoveredUrls={scan.total_violations + scan.passes}
+        scanId={scan.id}
+        siteId={scan.site_id}
       />
     </div>
   )

@@ -223,6 +223,51 @@ export const scanAnalytics = {
     stoppedReason: 'budget' | 'maxDuration' | 'enterprise' | 'complete';
   }) => {
     safeAnalytics('crawl.summary.v1', params)
+  },
+
+  /**
+   * Enterprise modal shown event (PR #4)
+   * Emitted when modal is first displayed to user
+   */
+  enterpriseModalShown: (params: {
+    scanId: string;
+    siteId: string;
+    discoveredUrls: number;
+  }) => {
+    safeAnalytics('enterprise.modal.shown', params)
+  },
+
+  /**
+   * Enterprise modal upgrade click event (PR #4)
+   * Emitted when user clicks "Upgrade to Enterprise" CTA
+   */
+  enterpriseModalUpgradeClick: (params: {
+    scanId: string;
+    siteId: string;
+  }) => {
+    safeAnalytics('enterprise.modal.upgrade_click', params)
+  },
+
+  /**
+   * Enterprise modal sample click event (PR #4)
+   * Emitted when user clicks "View Sample Report" CTA
+   */
+  enterpriseModalSampleClick: (params: {
+    scanId: string;
+    siteId: string;
+  }) => {
+    safeAnalytics('enterprise.modal.sample_click', params)
+  },
+
+  /**
+   * Enterprise modal dismiss event (PR #4)
+   * Emitted when user dismisses modal (close button, ESC, or backdrop click)
+   */
+  enterpriseModalDismiss: (params: {
+    scanId: string;
+    siteId: string;
+  }) => {
+    safeAnalytics('enterprise.modal.dismiss', params)
   }
 }
 
