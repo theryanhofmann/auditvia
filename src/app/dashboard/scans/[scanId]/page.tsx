@@ -13,17 +13,6 @@ interface RouteParams {
   params: Promise<{ scanId: string }>
 }
 
-interface ScanWithSite {
-  id: string
-  sites: {
-    id: string
-    name: string
-    url: string
-    team_id: string
-    monitoring_enabled: boolean
-  }
-}
-
 // Force dynamic rendering - never cache this page
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -307,7 +296,7 @@ export default async function ScanReportPage({ params: paramsPromise }: RoutePar
         console.debug(`🔍 [report] error_message column not available in legacy schema`)
         errorMessage = 'Scan failed - error details not available in legacy mode'
       }
-    } catch (error) {
+    } catch {
       console.warn(`🔍 [report] Could not fetch error message for failed scan: ${combinedScan.id}`)
       errorMessage = 'Scan failed - error details unavailable'
     }

@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { 
-  MessageCircle, 
+import {
   X, 
   Send, 
   Sparkles, 
@@ -53,7 +52,7 @@ export function GlobalAiEngineer({ teamId }: GlobalAiEngineerProps) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [mode, setMode] = useState<'founder' | 'developer'>('founder')
-  const [contextData, setContextData] = useState<any>(null)
+  const [contextData] = useState<any>(null)
 
   // Get context-aware greeting based on current page
   const getContextualGreeting = () => {

@@ -4,10 +4,9 @@
  */
 
 import { chromium, type Browser, type Page } from 'playwright'
-import type { Result as AxeResult } from 'axe-core'
 import * as path from 'path'
 import * as fs from 'fs'
-import { crawlPages, getScanProfileConfig, type PageToScan } from './crawler/pageCrawler'
+import { crawlPages, getScanProfileConfig } from './crawler/pageCrawler'
 import { testPageStates, type PageState } from './scanner/stateInteractions'
 import { classifyIssue, summarizeByTier } from './scanner/issueTiers'
 
@@ -302,7 +301,7 @@ export class DeepAccessibilityScanner {
   /**
    * Detect platform (reusing existing logic)
    */
-  private async detectPlatform(page: Page, url: string): Promise<{ name: string; confidence: number } | undefined> {
+  private async detectPlatform(page: Page, _url: string): Promise<{ name: string; confidence: number } | undefined> {
     try {
       const result = await page.evaluate(() => {
         const html = document.documentElement.outerHTML

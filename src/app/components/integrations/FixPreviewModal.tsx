@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { X, Check, AlertTriangle, Code, Sparkles, ExternalLink, Loader2 } from 'lucide-react'
+import { X, Check, AlertTriangle, Code, Sparkles, Loader2 } from 'lucide-react'
 import type { WebflowFixPreview } from '@/lib/integrations/webflow-client'
 
 interface FixPreviewModalProps {

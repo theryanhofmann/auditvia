@@ -51,7 +51,7 @@ function formatWCAGTags(tags: string[]): string {
   return tags
     .map(tag => {
       // Convert tags like "wcag2aa" or "wcag412" to readable format
-      const readable = tag.replace(/wcag/i, 'WCAG ').toUpperCase()
+      const _readable = tag.replace(/wcag/i, 'WCAG ').toUpperCase()
       return `[\`${tag}\`](https://www.w3.org/WAI/WCAG21/quickref/?tags=${tag})`
     })
     .join(' · ')

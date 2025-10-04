@@ -6,7 +6,6 @@ import { UpgradeCTA } from '@/app/components/ui/UpgradeCTA'
 import { ProBadge } from '@/app/components/ui/ProBadge'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
-import { Lock } from 'lucide-react'
 
 interface UpgradeCTAClientProps {
   scanId: string

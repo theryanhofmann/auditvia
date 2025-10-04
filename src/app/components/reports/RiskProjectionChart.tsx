@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { DollarSign, Info, AlertTriangle } from 'lucide-react'
 import { formatCurrency } from '@/lib/reports-utils'
 import { RESEARCH_BASED_WEIGHTS } from '@/lib/risk-methodology'
-import { RiskDisclaimer, RiskMethodologyBadge } from '@/app/components/ui/RiskDisclaimer'
+import { RiskDisclaimer } from '@/app/components/ui/RiskDisclaimer'
 import type { TrendDataPoint } from '@/types/reports'
 
 interface RiskProjectionChartProps {

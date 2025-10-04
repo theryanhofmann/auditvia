@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Scan profiles foundation: QUICK/SMART/DEEP types and budgets (#PR1)
+- Profile selection logic based on user tier and site size (#PR1)
+- Feature flags for scan profiles and enterprise gating (#PR1)
+
 ## [1.0.0] - 2025-08-02
 
 ### Database Schema

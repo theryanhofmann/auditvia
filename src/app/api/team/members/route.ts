@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/team/members
  * Returns all team members for the current user's team
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient()
 

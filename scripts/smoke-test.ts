@@ -185,7 +185,7 @@ async function testScanVisibility(userId: string, teamId: string) {
     updated_at: new Date().toISOString()
   }
 
-  const { data: scans, error: scanError } = await supabase
+  const { error: scanError } = await supabase
     .from('scans')
     .insert([publicScan, privateScan])
     .select()

@@ -15,8 +15,7 @@ export async function POST(request: NextRequest) {
 
     // Get authenticated user (or create one if they don't exist)
     const {
-      data: { user },
-      error: authError
+      data: { user }
     } = await supabase.auth.getUser()
 
     const body = await request.json()

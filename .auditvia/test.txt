@@ -1,0 +1,13 @@
+
+> auditvia@0.1.0 test /Users/ryanhofmann/auditvia
+> jest -- -w=0
+
+No tests found, exiting with code 1
+Run with `--passWithNoTests` to exit with code 0
+In /Users/ryanhofmann/auditvia
+  983 files checked.
+  testMatch: **/*.test.ts - 4 matches
+  testPathIgnorePatterns: /node_modules/, /.next/, /dist/, /__tests__/e2e/, /scripts/monitoring.test.ts, /__tests__/team-last-owner-guard.test.ts - 353 matches
+  testRegex:  - 0 matches
+Pattern: -w=0 - 0 matches
+ ELIFECYCLE  Test failed. See above for more details.

@@ -16,9 +16,9 @@ import {
   TrendingUp,
   Shield,
   Loader2,
-  Code,
-  BookOpen,
-  Github,
+  
+  
+  
   CheckCircle,
   Play,
   AlertTriangle

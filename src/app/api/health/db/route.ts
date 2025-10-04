@@ -97,7 +97,7 @@ export async function GET() {
     for (const table of rlsTables) {
       // Try to query without auth (should fail if RLS is enabled)
       const publicClient = await createClient()
-      const { data, error } = await publicClient
+      await publicClient
         .from(table)
         .select('*')
         .limit(1)

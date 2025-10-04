@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 
 // Legacy components
-import { FilterBar } from '@/app/components/reports/FilterBar'
 import { AIInsightsPanel } from '@/app/components/reports/AIInsightsPanel'
 import { ComplianceSummary } from '@/app/components/reports/ComplianceSummary'
 import { BenchmarkCard } from '@/app/components/reports/BenchmarkCard'
@@ -43,7 +42,7 @@ import {
 } from '@/lib/badge-calculator'
 import type { ReportFilters, TimeRange, Severity } from '@/types/reports'
 import { scanAnalytics } from '@/lib/safe-analytics'
-import { designTokens, staggerContainer, staggerItem } from '@/app/components/reports/design-tokens'
+import { staggerContainer, staggerItem } from '@/app/components/reports/design-tokens'
 
 interface EnhancedReportsClientProps {
   teamId: string

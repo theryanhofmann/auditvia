@@ -90,6 +90,7 @@ export default function SitesPage() {
               Add your first website to start monitoring accessibility
             </p>
             <button
+              type="button"
               onClick={() => setIsAddSiteModalOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
@@ -180,6 +181,7 @@ export default function SitesPage() {
         {sites.length > 0 && (
           <div className="mt-6 flex justify-center">
             <button
+              type="button"
               onClick={() => setIsAddSiteModalOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
             >

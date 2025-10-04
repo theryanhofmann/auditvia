@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, RotateCcw, ChevronDown, Calendar, Filter as FilterIcon } from 'lucide-react'
 import { focusRing } from './design-tokens'

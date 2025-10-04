@@ -42,10 +42,17 @@ export async function crawlPages(
   const discovered: PageToScan[] = []
   const visited = new Set<string>()
   const queue: PageToScan[] = [{ url: startUrl, depth: 0 }]
+  const crawlDeadline = Date.now() + options.timeoutMs
+  const maxQueueSize = Math.max(options.maxPages * 20, 50)
 
   console.log('[Crawler] Starting crawl:', { startUrl, options })
 
   while (queue.length > 0 && discovered.length < options.maxPages) {
+    if (Date.now() >= crawlDeadline) {
+      console.warn('[Crawler] Global crawl timeout reached, stopping early')
+      break
+    }
+
     const current = queue.shift()!
     
     // Skip if already visited
@@ -59,9 +66,12 @@ export async function crawlPages(
       
       // Navigate to page
       await page.goto(current.url, {
-        waitUntil: 'networkidle',
-        timeout: 30000
+        waitUntil: 'domcontentloaded',
+        timeout: Math.min(20000, options.timeoutMs)
       })
+
+      // Allow additional network settling without blocking crawl progress
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
 
       // Get page title
       const title = await page.title().catch(() => undefined)
@@ -81,7 +91,9 @@ export async function crawlPages(
       // Only discover more links if we haven't exceeded depth
       if (current.depth < options.maxDepth) {
         // Extract links
-        const links = await extractLinks(page, current.url, options.sameOriginOnly)
+        const remainingPages = options.maxPages - discovered.length
+        const linkLimit = Math.max(remainingPages * 5, 10)
+        const links = await extractLinks(page, current.url, options.sameOriginOnly, linkLimit)
         
         // Add new links to queue
         for (const link of links) {
@@ -92,9 +104,15 @@ export async function crawlPages(
             })
           }
         }
+
+        if (queue.length > maxQueueSize) {
+          console.warn('[Crawler] Queue size limit reached, trimming further exploration')
+          queue.length = maxQueueSize
+        }
       }
     } catch (error) {
       console.error(`[Crawler] Failed to visit ${current.url}:`, error)
+      visited.add(current.url)
       // Continue with next page
     }
   }
@@ -109,7 +127,8 @@ export async function crawlPages(
 async function extractLinks(
   page: Page,
   currentUrl: string,
-  sameOriginOnly: boolean
+  _sameOriginOnly: boolean,
+  limit: number
 ): Promise<string[]> {
   try {
     const baseOrigin = new URL(currentUrl).origin
@@ -140,7 +159,7 @@ async function extractLinks(
     const prioritized = prioritizeLinks(links)
     
     console.log(`[Crawler] Found ${prioritized.length} same-origin links`)
-    return prioritized
+    return prioritized.slice(0, limit)
   } catch (error) {
     console.error('[Crawler] Failed to extract links:', error)
     return []
@@ -183,4 +202,3 @@ function prioritizeLinks(links: string[]): string[] {
     .sort((a, b) => b.score - a.score)
     .map(s => s.link)
 }
-

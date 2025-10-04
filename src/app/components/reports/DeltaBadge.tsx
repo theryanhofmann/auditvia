@@ -1,7 +1,6 @@
 'use client'
 
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { designTokens } from './design-tokens'
 
 interface DeltaBadgeProps {
   value: number

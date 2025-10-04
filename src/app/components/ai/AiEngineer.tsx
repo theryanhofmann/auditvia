@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { 
-  MessageCircle, 
+import {
   X, 
   Send, 
   Sparkles, 

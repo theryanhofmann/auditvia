@@ -1,7 +1,7 @@
 'use client'
 
 import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Globe, Github, ArrowRight } from 'lucide-react'
-import { formatNumber, formatPercent, formatCurrency, calculatePercentChange } from '@/lib/reports-utils'
+import {    calculatePercentChange } from '@/lib/reports-utils'
 import type { KPIData } from '@/types/reports'
 import { useEffect, useState } from 'react'
 import { CircularProgress } from './CircularProgress'
@@ -65,14 +65,14 @@ function MiniSparkline({ data, color = '#3B82F6' }: { data: number[]; color?: st
   )
 }
 
-function KPICard({ 
-  title, 
-  value, 
-  previousValue, 
-  icon, 
-  description, 
-  loading, 
-  trend, 
+function KPICard({
+  title,
+  value,
+  previousValue,
+  icon,
+  description,
+  loading,
+  trend: _trend,
   type = 'number',
   showGauge = false,
   onClick,

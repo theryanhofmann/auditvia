@@ -1,18 +1,15 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { 
+import { useState, useMemo } from 'react'
+import {
   TrendingUp,
   TrendingDown,
   Shield,
   Award,
   Target,
   Activity,
-  Users,
   BarChart3,
   AlertTriangle,
-  CheckCircle2,
   Sparkles,
   User,
   Code
@@ -43,7 +40,6 @@ interface AIInsight {
 }
 
 export function ExecutiveDashboard({ teamId }: ExecutiveDashboardProps) {
-  const router = useRouter()
   const [mode, setMode] = useState<PersonaMode>('founder')
   
   const [filters] = useState<ReportFilters>(() => {

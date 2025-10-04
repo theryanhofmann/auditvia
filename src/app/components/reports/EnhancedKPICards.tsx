@@ -1,6 +1,6 @@
 'use client'
 
-import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Globe, Github, Sparkles } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Globe, Github } from 'lucide-react'
 import { formatNumber, formatPercent, calculatePercentChange } from '@/lib/reports-utils'
 import type { KPIData } from '@/types/reports'
 import { useEffect, useState } from 'react'
@@ -54,7 +54,7 @@ function MiniSparkline({ data }: { data: number[] }) {
   )
 }
 
-function KPICard({ title, value, previousValue, icon, description, loading, trend, sparklineData, onClick }: KPICardProps) {
+function KPICard({ title, value, previousValue, icon, description, loading, trend: _trend, sparklineData, onClick }: KPICardProps) {
   const [isVisible, setIsVisible] = useState(false)
   
   useEffect(() => {

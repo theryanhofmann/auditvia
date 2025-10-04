@@ -58,7 +58,7 @@ export type ProFeatureId = keyof typeof PRO_FEATURES
 /**
  * Check if a specific feature is available for a team
  */
-export function hasProFeature(team: Team | null | undefined, featureId: ProFeatureId): boolean {
+export function hasProFeature(team: Team | null | undefined, _featureId: ProFeatureId): boolean {
   return isProTeam(team)
 }
 

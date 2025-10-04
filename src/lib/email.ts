@@ -160,9 +160,9 @@ ${baseUrl}
   try {
     // Option 1: Use Supabase Email (if configured)
     const supabase = await createClient()
-    
+
     // Check if Supabase Email is configured
-    const { data: config } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 })
+    const { data: _config } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 })
     
     // For now, we'll use Supabase's built-in email sending
     // In production, replace this with SendGrid, Postmark, etc.

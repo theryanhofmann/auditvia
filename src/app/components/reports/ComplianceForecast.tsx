@@ -73,7 +73,7 @@ export function ComplianceForecast({ trendData }: ComplianceForecastProps) {
     }
 
     // Calculate risk projection
-    const violationWeights = {
+    const _violationWeights = {
       critical: 10000,
       serious: 5000,
       moderate: 1000,

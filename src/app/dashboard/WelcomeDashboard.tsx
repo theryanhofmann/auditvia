@@ -2,10 +2,9 @@
 
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
-import { 
-  Sparkles, Play, FileText, AlertTriangle, Users, 
-  TrendingUp, Shield, Zap, Globe, ChevronRight,
-  CheckCircle2, XCircle
+import {
+  Sparkles, Play, FileText, AlertTriangle, Users,
+  TrendingUp, Shield, Zap, Globe, ChevronRight
 } from 'lucide-react'
 
 export function WelcomeDashboard() {

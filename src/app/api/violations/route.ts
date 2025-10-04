@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id
     const { searchParams } = new URL(request.url)
     const severity = searchParams.get('severity')
-    const status = searchParams.get('status')
 
     // Get user's team
     const { data: memberships } = await supabase

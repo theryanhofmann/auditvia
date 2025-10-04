@@ -3,7 +3,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, TrendingUp, Activity, GitPullRequest, DollarSign, Shield } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { designTokens } from './design-tokens'
 
 interface Badge {
   id: string

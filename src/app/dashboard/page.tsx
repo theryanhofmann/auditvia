@@ -26,7 +26,7 @@ function DashboardLoading() {
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { sites = [], isLoading, isError } = useSites()
+  const { sites = [], isLoading, isError: _isError } = useSites()
   const [teamId, setTeamId] = useState<string | null>(null)
   const [teamError, setTeamError] = useState<string | null>(null)
   const [teamLoading, setTeamLoading] = useState(false)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/app/components/ui/button'
-import { FileDown, Loader2, CheckCircle, AlertCircle, Crown } from 'lucide-react'
+import { FileDown, Loader2, CheckCircle,  Crown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTeam } from '@/app/context/TeamContext'
 import { ProFeatureLock } from '@/app/components/ui/ProUpgradeButton'
@@ -26,7 +26,7 @@ async function getCachedTeamData(teamId: string) {
         teamDataCache.set(teamId, data.team)
         return data.team
       }
-    } catch (error) {
+    } catch {
       // Invalid cache, ignore
     }
   }
@@ -42,7 +42,7 @@ function setCachedTeamData(teamId: string, teamData: any) {
       team: teamData,
       timestamp: Date.now()
     }))
-  } catch (error) {
+  } catch {
     // localStorage not available or quota exceeded, ignore
   }
 }
@@ -82,7 +82,7 @@ export function PDFExportButton({
         setIsPro(false)
         return
       }
-      
+
       try {
         // Use cached team data instead of making API call
         const cachedTeam = await getCachedTeamData(teamId)
@@ -353,7 +353,7 @@ export function PDFExportCard({ scanId, siteName, className = '' }: PDFExportCar
         setIsPro(false)
       }
     }
-    
+
     checkProStatus()
   }, [teamId])
 

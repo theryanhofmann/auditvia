@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/app/lib/supabase/server'
 import { auth } from '@/auth'
 import { format } from 'date-fns'
-import { CheckCircle, XCircle, AlertTriangle, Info, Crown } from 'lucide-react'
+import {  XCircle, AlertTriangle, Info, Crown } from 'lucide-react'
 
 interface PDFReportPageProps {
   params: { scanId: string }
@@ -419,7 +419,7 @@ export default async function PDFReportPage({ params, searchParams }: PDFReportP
                 </span>
               </div>
               
-              {issues.slice(0, 10).map((issue: any, index: number) => (
+              {issues.slice(0, 10).map((issue: any, _index: number) => (
                 <div key={issue.id} className="issue-item">
                   <div className="issue-rule">{issue.rule}</div>
                   <div className="issue-description">{issue.description}</div>

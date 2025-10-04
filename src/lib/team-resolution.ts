@@ -208,7 +208,13 @@ export async function resolveTeamForRequest(
       created = true
     }
 
-    // 5. Get membership role
+    // 5. Null check for teamId
+    if (!teamId) {
+      console.error('[team-resolve] Failed to resolve team ID')
+      return null
+    }
+
+    // 6. Get membership role
     const { data: membership } = await supabase
       .from('team_members')
       .select('role')

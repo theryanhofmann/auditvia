@@ -6,7 +6,7 @@ import {
   Zap,
   AlertTriangle,
   CheckCircle2,
-  ChevronRight,
+  
   Play,
   Github,
   ExternalLink,
@@ -50,7 +50,7 @@ interface FixCenterClientProps {
 type PersonaMode = 'founder' | 'developer'
 
 export function FixCenterClient({ teamId }: FixCenterClientProps) {
-  const router = useRouter()
+  const _router = useRouter()
   const [mode, setMode] = useState<PersonaMode>('founder')
   const [loading, setLoading] = useState(true)
   const [violations, setViolations] = useState<ViolationIssue[]>([])

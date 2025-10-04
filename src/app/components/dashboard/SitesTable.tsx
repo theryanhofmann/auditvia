@@ -39,7 +39,7 @@ const getHostname = (url: string | null | undefined): string => {
   if (!url) return 'Unknown Site';
   try {
     return new URL(url).hostname;
-  } catch (e) {
+  } catch {
     console.warn('Invalid URL:', url);
     return url;
   }

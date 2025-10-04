@@ -7,24 +7,19 @@ import {
   Bell,
   CheckCircle2,
   AlertTriangle,
-  GitBranch,
+  
   FileText,
   Settings as SettingsIcon,
   Award,
-  Download,
+  
   Check,
-  Circle,
-  MoreVertical,
+  
+  
   X,
-  ExternalLink,
+  
   Eye,
   Github,
-  Play,
-  Filter,
-  XCircle,
   Loader2,
-  Trash2,
-  Volume2,
   VolumeX,
   Copy,
   ChevronRight
@@ -140,7 +135,7 @@ export function NotificationsClient() {
     new Set(searchParams.get('severity')?.split(',').filter(Boolean) || [])
   )
   const [dateRange, setDateRange] = useState(searchParams.get('range') || '30')
-  const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const [_menuOpen] = useState<string | null>(null)
 
   // Fetch notifications
   useEffect(() => {
@@ -245,7 +240,7 @@ export function NotificationsClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: unreadIds })
       })
-    } catch (error) {
+    } catch {
       // Revert on error
       setNotifications(prev => prev.map(n => 
         unreadIds.includes(n.id) ? { ...n, read: false } : n
@@ -271,7 +266,7 @@ export function NotificationsClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [id], read: newReadState })
       })
-    } catch (error) {
+    } catch {
       // Revert on error
       setNotifications(prev => prev.map(n => 
         n.id === id ? { ...n, read: !newReadState } : n
@@ -672,7 +667,7 @@ function DetailPanel({
 }
 
 // Mock data helper
-function getMockNotifications(): Notification[] {
+function _getMockNotifications(): Notification[] {
   return [
     {
       id: '1',

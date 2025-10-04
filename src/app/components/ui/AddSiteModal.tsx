@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Globe, AlertCircle } from 'lucide-react'
+import { X,  AlertCircle } from 'lucide-react'
 import { useSession, signIn } from 'next-auth/react'
 import { useTeam } from '@/app/context/TeamContext'
 import toast from 'react-hot-toast'
@@ -20,8 +20,8 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
   const [currentOperation, setCurrentOperation] = useState<'idle' | 'creating' | 'scanning'>('idle')
   const [urlError, setUrlError] = useState('')
   const [customDomainError, setCustomDomainError] = useState('')
-  const { data: session, status } = useSession()
-  const { teamId, loading: teamLoading } = useTeam()
+  const { data: _session, status } = useSession()
+  const { teamId: _teamId, loading: teamLoading } = useTeam()
 
   const validateUrl = (inputUrl: string): boolean => {
     setUrlError('')

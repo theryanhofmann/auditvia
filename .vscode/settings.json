@@ -1,37 +1,29 @@
 {
-  "[typescript]": {
-    "editor.defaultFormatter": "denoland.vscode-deno"
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
   },
-  "css.customData": [
-    ".vscode/css_custom_data.json"
-  ],
-  "css.validate": false,
-  "deno.enablePaths": [
-    "supabase/functions"
-  ],
-  "deno.lint": true,
-  "deno.unstable": [
-    "bare-node-builtins",
-    "byonm",
-    "sloppy-imports",
-    "unsafe-proto",
-    "webgpu",
-    "broadcast-channel",
-    "worker-options",
-    "cron",
-    "kv",
-    "ffi",
-    "fs",
-    "http",
-    "net"
-  ],
-  "deno.path": "/opt/homebrew/bin/deno",
-  "editor.quickSuggestions": {
-    "strings": true
+  "deno.enable": false,
+  "deno.lint": false,
+  "deno.unstable": false,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "claude.enabled": true,
+  "claude.autoComplete": true,
+  "claude.inlineCompletion": true,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.DS_Store": true
   },
-  "less.validate": false,
-  "scss.validate": false,
-  "tailwindCSS.includeLanguages": {
-    "css": "css"
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/*.log": true
   }
 }

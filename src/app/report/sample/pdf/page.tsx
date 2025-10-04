@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { CheckCircle, XCircle, AlertTriangle, Info, Crown } from 'lucide-react'
+import {  XCircle, AlertTriangle, Info, Crown } from 'lucide-react'
 
 // Sample data for demonstration
 const sampleScan = {

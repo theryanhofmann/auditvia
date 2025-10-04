@@ -167,7 +167,7 @@ async function checkColumn(tableName, columnName) {
   }
 }
 
-async function checkExtension(extensionName) {
+async function checkExtension(_extensionName) {
   try {
     // Try to query pg_extension directly via a simple test
     const { error } = await supabase.from('sites').select('id').limit(1)
@@ -184,7 +184,7 @@ async function checkExtension(extensionName) {
     }
     
     return { exists: true, warning: 'Could not verify' }
-  } catch (err) {
+  } catch {
     return { exists: true, warning: 'Could not verify' }
   }
 }

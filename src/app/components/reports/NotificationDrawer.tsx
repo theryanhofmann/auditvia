@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Bell, CheckCircle2, AlertTriangle, Github, TrendingUp, Info } from 'lucide-react'
-import { designTokens, focusRing } from './design-tokens'
+import { focusRing } from './design-tokens'
 
 export interface Notification {
   id: string
@@ -267,7 +267,7 @@ export function NotificationDrawer({
 }
 
 // Custom scrollbar styles (add to global CSS or use inline)
-const scrollbarStyles = `
+const _scrollbarStyles = `
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download, FileText, FileSpreadsheet, ChevronDown } from 'lucide-react'
-import { designTokens, focusRing } from './design-tokens'
+import { focusRing } from './design-tokens'
 import toast from 'react-hot-toast'
 
 interface ExportMenuProps {

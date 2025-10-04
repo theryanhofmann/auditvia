@@ -24,14 +24,16 @@ export function getDateRangeFromTimeRange(timeRange: TimeRange): { startDate: st
     case '180d':
       start.setDate(end.getDate() - 180)
       break
-    case 'month':
+    case 'month': {
       start.setDate(1) // First day of current month
       break
-    case 'quarter':
+    }
+    case 'quarter': {
       const currentMonth = end.getMonth()
       const quarterStartMonth = Math.floor(currentMonth / 3) * 3
       start.setMonth(quarterStartMonth, 1)
       break
+    }
     default:
       start.setDate(end.getDate() - 30) // Default to 30 days
   }

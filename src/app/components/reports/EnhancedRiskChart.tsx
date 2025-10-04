@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Download, TrendingUp, TrendingDown, DollarSign, Info } from 'lucide-react'
-import { exportToCSV, formatCurrency } from '@/lib/reports-utils'
+import { exportToCSV } from '@/lib/reports-utils'
 import { AnimatedNumber } from './AnimatedNumber'
 import type { RiskData } from '@/types/reports'
 

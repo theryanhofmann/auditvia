@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { 
   User, Bell, Palette, Scan, Zap, Shield, CreditCard, 
-  Users, Mail, Globe, Moon, Sun, Monitor, Volume2, VolumeX,
-  Check, X, Save, Loader2
+  Users,   Moon, Sun, Monitor,  
+    Save, Loader2
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'

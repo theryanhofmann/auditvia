@@ -1,19 +1,47 @@
 name: CI
+
 on:
   pull_request:
   push:
     branches: [main]
 
+env:
+  CI: true
+  NEXT_TELEMETRY_DISABLED: 1
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: test-secret
+      GITHUB_ID: test-client-id
+      GITHUB_SECRET: test-client-secret
+      SUPABASE_URL: http://127.0.0.1:54321
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      RUN_DB_TESTS: '0'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint --if-present
-      - run: npm run typecheck --if-present
-      - run: npm test --if-present -- --run
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10.13.1
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run lint
+        run: pnpm run lint
+
+      - name: Run type-check
+        run: pnpm run type-check
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Run unit tests
+        run: pnpm test

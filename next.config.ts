@@ -12,6 +12,12 @@ const nextConfig: NextConfig = {
     mdxRs: true,
   },
   
+  // ESLint configuration
+  eslint: {
+    // Don't run ESLint during build - we run it separately in CI
+    ignoreDuringBuilds: true,
+  },
+  
   // Environment variables
   env: {
     CUSTOM_KEY: 'my-value',

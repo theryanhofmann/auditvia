@@ -2,7 +2,7 @@ import Stripe from 'stripe'
 
 // Initialize Stripe with proper API version (optional for build)
 export const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-06-30.basil',
+  apiVersion: '2025-08-27.basil',
   typescript: true,
 }) : null
 

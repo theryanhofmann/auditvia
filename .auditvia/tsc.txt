@@ -1,0 +1,7 @@
+
+> auditvia@0.1.0 typecheck /Users/ryanhofmann/auditvia
+> tsc -p tsconfig.json --noEmit
+
+scripts/test/setup.ts(1,22): error TS2307: Cannot find module '@jest/globals' or its corresponding type declarations.
+src/lib/stripe.ts(5,3): error TS2322: Type '"2025-06-30.basil"' is not assignable to type '"2025-08-27.basil"'.
+ ELIFECYCLE  Command failed with exit code 2.

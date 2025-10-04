@@ -1,26 +1,32 @@
 'use client'
 
 import { useState } from 'react'
-import { 
-  X, 
-  Code, 
-  User, 
-  ExternalLink, 
-  Copy, 
+import {
+  X,
+  Code,
+  User,
+  ExternalLink,
+  Copy,
   Check,
   Github,
   FileText,
-  AlertCircle,
   Mail,
   Sparkles
 } from 'lucide-react'
+import {
+  getIssueTitle,
+  getRequirement,
+  getFounderExplanation,
+  getAffectedUsers,
+  getFounderSteps,
+  getCodeSnippet
+} from '@/lib/issue-explanations'
 
 interface IssueDetailPanelProps {
   issue: any
   isOpen: boolean
   onClose: () => void
   onOpenAI?: (prefillData: any) => void
-  onEmailDesigner?: (issue: any) => void
   mode?: 'founder' | 'developer'
   teamId?: string
   scanId?: string
@@ -29,12 +35,11 @@ interface IssueDetailPanelProps {
   platform?: string
 }
 
-export function IssueDetailPanel({ 
-  issue, 
-  isOpen, 
+export function IssueDetailPanel({
+  issue,
+  isOpen,
   onClose,
   onOpenAI,
-  onEmailDesigner,
   mode: initialMode = 'founder',
   teamId,
   scanId,
@@ -107,7 +112,7 @@ export function IssueDetailPanel({
                 ))}
               </div>
               <h2 className="text-2xl font-bold text-slate-900 leading-tight">
-                {issue.description || issue.help || 'Accessibility Issue'}
+                {getIssueTitle(issue.id || issue.rule_id || issue.rule, issue.description || issue.help)}
               </h2>
               
               {/* Page URL and State context */}
@@ -174,6 +179,14 @@ export function IssueDetailPanel({
           {mode === 'founder' ? (
             /* FOUNDER MODE */
             <div className="space-y-8">
+              {/* Requirement */}
+              <section>
+                <h3 className="text-lg font-semibold text-slate-900 mb-3">Requirement:</h3>
+                <p className="text-slate-700 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  {getRequirement(issue)}
+                </p>
+              </section>
+
               {/* What This Means */}
               <section>
                 <h3 className="text-lg font-semibold text-slate-900 mb-3">What This Means</h3>
@@ -662,42 +675,3 @@ function EmailDesignerModal({
     </>
   )
 }
-
-// Helper functions for founder mode - EXACT VERBATIM FROM SPEC
-function getFounderExplanation(issue: any): string {
-  // Spec text: "This element is not accessible to screen readers. A blind user may miss key information."
-  return 'This element is not accessible to screen readers. A blind user may miss key information.'
-}
-
-function getFounderSteps(issue: any): string[] {
-  // Spec text: "Add a text label that explains this element. If it's decorative, hide it from assistive tech."
-  return [
-    'Add a text label that explains this element. If it\'s decorative, hide it from assistive tech.'
-  ]
-}
-
-function getAffectedUsers(issue: any): string[] {
-  // Spec text: "Blind/low-vision users; keyboard-only users."
-  return [
-    'Blind/low-vision users',
-    'Keyboard-only users'
-  ]
-}
-
-function getCodeSnippet(issue: any): string | null {
-  // Ensure ruleId is always a string (same fix as in verdict-system.ts)
-  const ruleId = String(issue.id || issue.rule_id || '').toLowerCase()
-  
-  if (ruleId.includes('button-name')) {
-    return `<!-- Before -->\n<button></button>\n\n<!-- After -->\n<button>Submit Form</button>\n\n<!-- Or for icon buttons -->\n<button aria-label="Close menu">\n  <Icon />\n</button>`
-  }
-  if (ruleId.includes('color-contrast')) {
-    return `/* Before */\ncolor: #999;\nbackground: #fff;\n\n/* After - meets WCAG AA */\ncolor: #333;\nbackground: #fff;\n/* Contrast ratio: 12.6:1 */`
-  }
-  if (ruleId.includes('image-alt')) {
-    return `<!-- Before -->\n<img src="logo.png">\n\n<!-- After -->\n<img src="logo.png" alt="Company name logo">\n\n<!-- Decorative image -->\n<img src="divider.png" alt="">`
-  }
-  
-  return null
-}
-

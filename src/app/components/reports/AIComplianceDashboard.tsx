@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   TrendingUp, 
@@ -19,9 +19,8 @@ import {
   Award,
   BarChart3,
   Sparkles,
-  ArrowUp,
-  ArrowDown,
-  Activity
+  
+  
 } from 'lucide-react'
 import { formatCurrency, formatNumber } from '@/lib/reports-utils'
 import { calculateRiskReduction, RESEARCH_BASED_WEIGHTS } from '@/lib/risk-methodology'
@@ -55,12 +54,12 @@ interface AIInsight {
   }[]
 }
 
-export function AIComplianceDashboard({ 
-  kpiData, 
-  trendData, 
+export function AIComplianceDashboard({
+  kpiData,
+  trendData,
   topRules,
   loading,
-  teamId 
+  teamId: _teamId
 }: AIComplianceDashboardProps) {
   const router = useRouter()
   const [mode, setMode] = useState<PersonaMode>('founder')
@@ -476,11 +475,12 @@ export function AIComplianceDashboard({
             {/* Mode Toggle */}
             <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
               <button
+                type="button"
                 onClick={() => setMode('founder')}
                 className={`
                   px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2
-                  ${mode === 'founder' 
-                    ? 'bg-white text-gray-900 shadow-sm' 
+                  ${mode === 'founder'
+                    ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'}
                 `}
               >
@@ -488,11 +488,12 @@ export function AIComplianceDashboard({
                 Founder
               </button>
               <button
+                type="button"
                 onClick={() => setMode('developer')}
                 className={`
                   px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2
-                  ${mode === 'developer' 
-                    ? 'bg-white text-gray-900 shadow-sm' 
+                  ${mode === 'developer'
+                    ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'}
                 `}
               >
@@ -615,18 +616,18 @@ export function AIComplianceDashboard({
               <svg className="w-full h-full" preserveAspectRatio="none">
                 {/* Calculate points for trend line */}
                 {(() => {
-                  const points = trendData.map((day, idx) => {
+                  const points = trendData.map((day) => {
                     const riskValue = (day.critical_count || 0) * RESEARCH_BASED_WEIGHTS.critical +
                       (day.serious_count || 0) * RESEARCH_BASED_WEIGHTS.serious +
                       (day.moderate_count || 0) * RESEARCH_BASED_WEIGHTS.moderate +
                       (day.minor_count || 0) * RESEARCH_BASED_WEIGHTS.minor
                     return riskValue
                   })
-                  
+
                   const maxRisk = Math.max(...points, 1)
                   const minRisk = Math.min(...points)
                   const range = maxRisk - minRisk || 1
-                  
+
                   const pathPoints = points.map((risk, idx) => {
                     const x = (idx / (points.length - 1)) * 100
                     const y = 100 - ((risk - minRisk) / range) * 80 - 10 // 10% padding
@@ -796,6 +797,7 @@ export function AIComplianceDashboard({
                       const ActionIcon = action.icon
                       return (
                         <button
+                          type="button"
                           key={idx}
                           onClick={() => handleAction(action.action, insight.id)}
                           className={`
@@ -829,6 +831,7 @@ export function AIComplianceDashboard({
               Run your first scan to start receiving AI-powered compliance insights
             </p>
             <button
+              type="button"
               onClick={() => router.push('/dashboard/sites')}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
             >

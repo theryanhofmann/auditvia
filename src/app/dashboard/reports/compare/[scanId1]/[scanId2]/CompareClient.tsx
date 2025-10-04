@@ -64,7 +64,7 @@ export function CompareClient({ oldScan, newScan, diff, isPro }: CompareClientPr
 
   const oldScore = calculateScore(oldScan)
   const newScore = calculateScore(newScan)
-  const scoreDiff = newScore - oldScore
+  const _scoreDiff = newScore - oldScore
 
   return (
     <div>

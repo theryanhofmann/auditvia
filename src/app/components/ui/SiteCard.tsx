@@ -33,7 +33,7 @@ export function SiteCard({
 }: SiteCardProps) {
   const router = useRouter()
   const [isScanning, setIsScanning] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
+  const [_showSettings, setShowSettings] = useState(false)
   const domain = new URL(url).hostname
   const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
 

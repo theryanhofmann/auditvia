@@ -6,7 +6,7 @@ import {
   CheckCircle, 
   XCircle, 
   Eye,
-  Calendar,
+  
   Activity,
   AlertTriangle,
   Globe,
@@ -198,6 +198,7 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Scan History</h2>
         <div className="flex items-center space-x-4">
           <button
+            type="button"
             onClick={fetchScans}
             disabled={isLoading}
             className="flex items-center space-x-2 px-4 py-2 border border-zinc-200 dark:border-zinc-800 rounded-md text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 disabled:opacity-50 transition-colors"
@@ -355,6 +356,7 @@ export function ScanHistoryClient({ siteId }: ScanHistoryClientProps) {
                         )}
                         {scan.public && session?.user.pro && (
                           <button
+                            type="button"
                             onClick={() => copyPublicLink(scan.id)}
                             className="inline-flex items-center space-x-1 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                             title="Copy public link"

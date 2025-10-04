@@ -1,4 +1,4 @@
-import { chromium, Browser, Page } from 'playwright'
+import { chromium, Browser } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
 
@@ -120,8 +120,8 @@ class PDFGenerator {
         // Upload to Supabase Storage
         const fileName = `accessibility-report-${scanId}-${Date.now()}.pdf`
         const filePath = `reports/${teamId}/${fileName}`
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
+
+        const { data: _uploadData, error: uploadError } = await supabase.storage
           .from('pdf-reports')
           .upload(filePath, pdfBuffer, {
             contentType: 'application/pdf',

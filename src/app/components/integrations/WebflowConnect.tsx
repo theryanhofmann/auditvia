@@ -17,8 +17,8 @@ interface WebflowConnectProps {
 
 export function WebflowConnect({ teamId, onConnected, variant = 'button' }: WebflowConnectProps) {
   const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected' | 'error'>('checking')
-  const [connectionId, setConnectionId] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [_connectionId, setConnectionId] = useState<string | null>(null)
 
   // Check connection status on mount
   useEffect(() => {

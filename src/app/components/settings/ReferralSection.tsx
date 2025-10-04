@@ -21,7 +21,7 @@ export function ReferralSection() {
       setCopying(true)
       await navigator.clipboard.writeText(referralLink)
       toast.success('Referral link copied!')
-    } catch (error) {
+    } catch {
       toast.error('Failed to copy link')
     } finally {
       setCopying(false)

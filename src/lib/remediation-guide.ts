@@ -14,7 +14,7 @@ interface RemediationGuide {
 /**
  * Get detailed remediation guidance for a specific accessibility rule
  */
-export function getRemediationGuide(rule: string, html?: string, selector?: string): RemediationGuide {
+export function getRemediationGuide(rule: string, _html?: string, _selector?: string): RemediationGuide {
   const guides: Record<string, RemediationGuide> = {
     'color-contrast': {
       title: 'Fix Color Contrast',

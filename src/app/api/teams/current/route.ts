@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { resolveCurrentUserAndTeam, getCurrentTeamInfo } from '@/app/lib/resolveCurrentUserAndTeam'
-import { setCurrentTeamId } from '@/app/lib/team-utils'
+import { getCurrentTeamInfo } from '@/app/lib/resolveCurrentUserAndTeam'
 import { resolveTeamForRequest } from '@/lib/team-resolution'
 import { auth } from '@/auth'
 import { cookies } from 'next/headers'

@@ -5,7 +5,7 @@ import { ReportTopBanner } from '@/app/components/report/ReportTopBanner'
 import { CategoryCard } from '@/app/components/report/CategoryCard'
 import { IssueDetailPanel } from '@/app/components/report/IssueDetailPanel'
 import { AiEngineer } from '@/app/components/ai/AiEngineer'
-import { calculateVerdict, categorizeIssues } from '@/lib/verdict-system'
+import { calculateVerdict, categorizeIssues, CategoryScore } from '@/lib/verdict-system'
 import { ExportDropdown } from '@/app/components/ui/ExportDropdown'
 import { ExportRemediationButton } from '@/app/components/ui/ExportRemediationButton'
 import { CreateTicketsButton } from '@/app/components/ui/CreateTicketsButton'
@@ -128,7 +128,7 @@ export function EnterpriseReportClient({
     title: verdict.title,
     riskLevel: verdict.riskLevel
   })
-  console.log('🎨 [EnterpriseReportClient] Categories:', categories.map(c => ({
+  console.log('🎨 [EnterpriseReportClient] Categories:', categories.map((c: CategoryScore) => ({
     name: c.displayName,
     issueCount: c.issueCount,
     criticalCount: c.criticalCount
@@ -279,11 +279,12 @@ export function EnterpriseReportClient({
               <span className="text-xs uppercase tracking-wide text-gray-500 font-semibold">View Mode</span>
               <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-1">
                 <button
+                  type="button"
                   onClick={() => handleModeChange('founder')}
                   className={`
                     px-4 py-1.5 rounded-md text-sm font-medium transition-all
-                    ${experienceMode === 'founder' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
+                    ${experienceMode === 'founder'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}
                   `}
                   data-testid="mode-toggle-founder"
@@ -291,11 +292,12 @@ export function EnterpriseReportClient({
                   Founder
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleModeChange('developer')}
                   className={`
                     px-4 py-1.5 rounded-md text-sm font-medium transition-all
-                    ${experienceMode === 'developer' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
+                    ${experienceMode === 'developer'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}
                   `}
                   data-testid="mode-toggle-developer"
@@ -388,7 +390,7 @@ export function EnterpriseReportClient({
         {/* Category Cards */}
         {categories.length > 0 ? (
           <div className="space-y-6" data-category-grid>
-            {categories.map((category) => {
+            {categories.map((category: CategoryScore) => {
               // Get issues for this category
               const categoryIssues = issues.filter(issue => {
                 const ruleId = issue.rule_id || issue.id || ''
@@ -445,7 +447,7 @@ export function EnterpriseReportClient({
         issue={selectedIssue}
         isOpen={!!selectedIssue}
         onClose={() => setSelectedIssue(null)}
-        onOpenAI={(prefillData) => {
+        onOpenAI={(prefillData: any) => {
           // Open AI Engineer with prefilled data
           console.log('🤖 [Open AI with prefill]', prefillData)
           // TODO: Trigger AI Engineer panel with prefilled message

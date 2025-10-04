@@ -4,7 +4,6 @@ import {
   createReportsClient,
   verifyTeamAccess,
   parseReportFilters,
-  applyFilters,
   ErrorResponses
 } from '@/lib/reports-api'
 
