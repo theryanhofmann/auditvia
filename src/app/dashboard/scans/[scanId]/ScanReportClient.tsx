@@ -5,18 +5,17 @@ import { format } from 'date-fns'
 import { 
   CheckCircle, 
   XCircle, 
-  AlertTriangle,
+  
   Download,
-  Copy,
-  ChevronDown,
-  ChevronRight,
+  
+  
+  
   Globe,
   Link as LinkIcon,
   ArrowLeftRight,
   Users,
   Activity
 } from 'lucide-react'
-import { ViolationCard } from '@/app/components/ui/ViolationCard'
 import { Switch } from '@/app/components/ui/switch'
 import { toast } from 'react-hot-toast'
 import { useSession } from 'next-auth/react'
@@ -67,14 +66,14 @@ interface ScanReportClientProps {
 }
 
 function IssueCard({
-  id,
+  id: _id,
   rule,
   impact,
   description,
   help_url,
   html,
   selector,
-  instances,
+  instances: _instances,
   expanded,
   onToggle
 }: ViolationCardProps) {
@@ -131,8 +130,8 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
   const [isPublic, setIsPublic] = useState(scan.public)
   const [isUpdating, setIsUpdating] = useState(false)
   const [issues, setIssues] = useState<Issue[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [_isLoading, setIsLoading] = useState(true)
+  const [_error, setError] = useState<string | null>(null)
   const [expandedIssues, setExpandedIssues] = useState<string[]>([])
   const [previousScan, setPreviousScan] = useState<string | null>(null)
   const router = useRouter()
@@ -279,7 +278,7 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
       return aOrder - bOrder
     }) as [Issue['impact'], Issue[]][]
 
-  const copyToClipboard = (text: string) => {
+  const _copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
 
