@@ -131,8 +131,20 @@ export interface CoverageSummary {
   reachedLimit: boolean;
 
   /** Reason scan stopped */
-  stopReason: 'complete' | 'url_limit' | 'time_limit' | 'enterprise_detected';
+  stopReason: 'complete' | 'url_limit' | 'time_limit' | 'enterprise_detected' | 'budget';
 
   /** Enterprise detection details (if applicable) */
   enterpriseDetection?: EnterpriseDetection;
+
+  /** Scan start timestamp (ISO 8601) */
+  startedAt?: string;
+
+  /** Scan end timestamp (ISO 8601) */
+  endedAt?: string;
+
+  /** Pages actually crawled */
+  pagesCrawled?: number;
+
+  /** URLs discovered during crawl */
+  discoveredUrls?: number;
 }

@@ -1,9 +1,12 @@
 /**
  * Deep Scan v1 Prototype - Multi-Page Crawler
  * Discovers up to 5 pages from a site for scanning
+ * Enhanced with budget enforcement (PR #3)
  */
 
 import { Page } from 'playwright'
+import { PROFILE_BUDGETS, type ScanProfile, type ProfileBudget } from '@/types/scan-profiles'
+import { isScanProfilesEnabled } from '@/lib/feature-flags'
 
 export interface PageToScan {
   url: string
@@ -16,7 +19,17 @@ export interface CrawlOptions {
   maxDepth: number
   timeoutMs: number
   sameOriginOnly: boolean
+  /** Budget enforcement (PR #3) */
+  budget?: ProfileBudget
+  /** Scan profile for telemetry */
+  profile?: ScanProfile
 }
+
+/** Per-page URL discovery cap (PR #3) */
+export const PER_PAGE_URL_CAP = 30
+
+/** Frontier cap multiplier (PR #3) */
+export const FRONTIER_CAP_MULTIPLIER = 2
 
 const SCAN_PROFILE_CONFIGS = {
   quick: { maxPages: 1, maxDepth: 0, timeoutMs: 60000 },
@@ -24,15 +37,37 @@ const SCAN_PROFILE_CONFIGS = {
   deep: { maxPages: 5, maxDepth: 2, timeoutMs: 180000 }
 }
 
-export function getScanProfileConfig(profile: 'quick' | 'standard' | 'deep'): CrawlOptions {
+/**
+ * Get crawl options for a profile
+ * Enhanced with budget enforcement (PR #3)
+ */
+export function getScanProfileConfig(
+  profile: 'quick' | 'standard' | 'deep' | ScanProfile
+): CrawlOptions {
+  // If budget enforcement is enabled, use PROFILE_BUDGETS
+  if (isScanProfilesEnabled() && (profile === 'QUICK' || profile === 'SMART' || profile === 'DEEP')) {
+    const budget = PROFILE_BUDGETS[profile]
+    return {
+      maxPages: budget.maxUrls,
+      maxDepth: 2, // Reasonable default
+      timeoutMs: budget.maxDuration,
+      sameOriginOnly: true,
+      budget,
+      profile,
+    }
+  }
+
+  // Legacy behavior
+  const legacyProfile = profile.toLowerCase() as 'quick' | 'standard' | 'deep'
   return {
-    ...SCAN_PROFILE_CONFIGS[profile],
+    ...SCAN_PROFILE_CONFIGS[legacyProfile] || SCAN_PROFILE_CONFIGS.standard,
     sameOriginOnly: true
   }
 }
 
 /**
  * Crawl a website to discover pages for scanning
+ * Enhanced with budget enforcement (PR #3)
  */
 export async function crawlPages(
   page: Page,
@@ -43,7 +78,11 @@ export async function crawlPages(
   const visited = new Set<string>()
   const queue: PageToScan[] = [{ url: startUrl, depth: 0 }]
   const crawlDeadline = Date.now() + options.timeoutMs
-  const maxQueueSize = Math.max(options.maxPages * 20, 50)
+
+  // Budget enforcement: Use frontier cap if budget provided
+  const maxQueueSize = options.budget
+    ? options.budget.maxUrls * FRONTIER_CAP_MULTIPLIER
+    : Math.max(options.maxPages * 20, 50)
 
   console.log('[Crawler] Starting crawl:', { startUrl, options })
 
@@ -54,16 +93,16 @@ export async function crawlPages(
     }
 
     const current = queue.shift()!
-    
+
     // Skip if already visited
     if (visited.has(current.url)) continue
-    
+
     // Skip if exceeds depth
     if (current.depth > options.maxDepth) continue
 
     try {
       console.log(`[Crawler] Visiting: ${current.url} (depth: ${current.depth})`)
-      
+
       // Navigate to page
       await page.goto(current.url, {
         waitUntil: 'domcontentloaded',
@@ -75,7 +114,7 @@ export async function crawlPages(
 
       // Get page title
       const title = await page.title().catch(() => undefined)
-      
+
       // Mark as visited and add to discovered
       visited.add(current.url)
       discovered.push({
@@ -90,11 +129,13 @@ export async function crawlPages(
 
       // Only discover more links if we haven't exceeded depth
       if (current.depth < options.maxDepth) {
-        // Extract links
-        const remainingPages = options.maxPages - discovered.length
-        const linkLimit = Math.max(remainingPages * 5, 10)
+        // Budget enforcement: Use PER_PAGE_URL_CAP if budget provided
+        const linkLimit = options.budget
+          ? PER_PAGE_URL_CAP
+          : Math.max((options.maxPages - discovered.length) * 5, 10)
+
         const links = await extractLinks(page, current.url, options.sameOriginOnly, linkLimit)
-        
+
         // Add new links to queue
         for (const link of links) {
           if (!visited.has(link) && !queue.some(p => p.url === link)) {
@@ -105,8 +146,9 @@ export async function crawlPages(
           }
         }
 
+        // Budget enforcement: Frontier cap
         if (queue.length > maxQueueSize) {
-          console.warn('[Crawler] Queue size limit reached, trimming further exploration')
+          console.warn(`[Crawler] Frontier cap (${maxQueueSize}) reached, trimming queue`)
           queue.length = maxQueueSize
         }
       }
