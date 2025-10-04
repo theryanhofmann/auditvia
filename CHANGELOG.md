@@ -15,6 +15,10 @@
 - Database migration for `coverage_summary` JSONB column (#PR3)
 - Telemetry event `crawl.summary.v1` for crawl metrics tracking (#PR3)
 - Crawl metrics in scan results (discoveredUrls, crawlTimeMs) (#PR3)
+- Enterprise gate modal component for scan limit notifications (#PR4)
+- Modal trigger on `incomplete_enterprise_gate` status (#PR4)
+- Upgrade to Enterprise CTA linking to `/pricing#enterprise` (#PR4)
+- View Sample Report CTA for coverage summary display (#PR4)
 
 ## [1.0.0] - 2025-08-02
 

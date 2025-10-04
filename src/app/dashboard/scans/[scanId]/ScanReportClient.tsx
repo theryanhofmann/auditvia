@@ -24,6 +24,8 @@ import { AISuggestionsPanel } from '@/app/components/scan/AISuggestionsPanel'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { useRouter } from 'next/navigation'
+import { EnterpriseGateModal } from '@/app/components/ui/EnterpriseGateModal'
+import { isEnterpriseGatingEnabled } from '@/lib/feature-flags'
 
 interface Issue {
   id: string
@@ -134,6 +136,7 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
   const [_error, setError] = useState<string | null>(null)
   const [expandedIssues, setExpandedIssues] = useState<string[]>([])
   const [previousScan, setPreviousScan] = useState<string | null>(null)
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false)
   const router = useRouter()
 
   // Validate team access
@@ -143,6 +146,13 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
       toast.error('You do not have access to this scan')
     }
   }, [teamId, scan.team_id, teamLoading, router])
+
+  // Trigger enterprise gate modal on incomplete_enterprise_gate status
+  useEffect(() => {
+    if (isEnterpriseGatingEnabled() && scan.status === 'incomplete_enterprise_gate') {
+      setShowEnterpriseModal(true)
+    }
+  }, [scan.status])
 
   // Calculate accessibility score treating inapplicable as passes
   const calculateScore = (data: typeof scan) => {
@@ -571,6 +581,17 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
           ))}
         </div>
       </div>
+
+      {/* Enterprise Gate Modal */}
+      <EnterpriseGateModal
+        open={showEnterpriseModal}
+        onOpenChange={setShowEnterpriseModal}
+        onViewSampleReport={() => {
+          // Show coverage summary with top 20-50 URLs
+          toast.success('Sample report with top URLs displayed')
+        }}
+        discoveredUrls={scan.total_violations + scan.passes}
+      />
     </div>
   )
 } 
