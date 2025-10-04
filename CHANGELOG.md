@@ -19,6 +19,13 @@
 - Modal trigger on `incomplete_enterprise_gate` status (#PR4)
 - Upgrade to Enterprise CTA linking to `/pricing#enterprise` (#PR4)
 - View Sample Report CTA for coverage summary display (#PR4)
+- Modal A11y: role="dialog", aria-labelledby, aria-describedby, focus trap, ESC dismiss (#PR4)
+- Modal telemetry: shown, upgrade_click, sample_click, dismiss events (#PR4)
+- Deep link support: `?view=sample#sample-report` with focus management (#PR4)
+- Enterprise coverage banner for partial results notification (#PR5)
+- Sample report section showing top 50 issues when gated (#PR5)
+- Banner telemetry: shown, upgrade_click events (#PR5)
+- Banner A11y: role="region", aria-labelledby, keyboard accessible (#PR5)
 
 ## [1.0.0] - 2025-08-02
 

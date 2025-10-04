@@ -268,6 +268,29 @@ export const scanAnalytics = {
     siteId: string;
   }) => {
     safeAnalytics('enterprise.modal.dismiss', params)
+  },
+
+  /**
+   * Enterprise banner shown event (PR #5)
+   * Emitted when banner is displayed on report page
+   */
+  enterpriseBannerShown: (params: {
+    scanId: string;
+    siteId: string;
+    discoveredPages: number;
+  }) => {
+    safeAnalytics('enterprise.banner.shown', params)
+  },
+
+  /**
+   * Enterprise banner upgrade click event (PR #5)
+   * Emitted when user clicks "Upgrade to Enterprise" CTA in banner
+   */
+  enterpriseBannerUpgradeClick: (params: {
+    scanId: string;
+    siteId: string;
+  }) => {
+    safeAnalytics('enterprise.banner.upgrade_click', params)
   }
 }
 

@@ -25,6 +25,7 @@ import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { EnterpriseGateModal, SAMPLE_REPORT_ANCHOR } from '@/app/components/ui/EnterpriseGateModal'
+import { EnterpriseGateBanner } from '@/app/components/scans/EnterpriseGateBanner'
 import { isEnterpriseGatingEnabled, isScanProfilesEnabled } from '@/lib/feature-flags'
 
 interface Issue {
@@ -266,8 +267,20 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
     )
   }
 
-  // Group issues by impact
-  const groupedIssues = scan.issues.reduce((acc, issue) => {
+  // Check if we should show enterprise banner and sample section
+  const showEnterpriseBanner =
+    isEnterpriseGatingEnabled() &&
+    isScanProfilesEnabled() &&
+    scan.status === 'incomplete_enterprise_gate'
+
+  // For sample report, show top 20-50 issues using existing priority logic
+  const sampleIssues = showEnterpriseBanner
+    ? issues.slice(0, Math.min(50, issues.length))
+    : issues
+
+  // Group issues by impact (use sampleIssues if showing partial results)
+  const issuesToShow = showEnterpriseBanner ? sampleIssues : issues
+  const groupedIssues = issuesToShow.reduce((acc, issue) => {
     const impact = issue.impact
     if (!acc[impact]) {
       acc[impact] = []
@@ -390,6 +403,15 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
 
   return (
     <div className="space-y-8">
+      {/* Enterprise Gate Banner */}
+      {showEnterpriseBanner && (
+        <EnterpriseGateBanner
+          scanId={scan.id}
+          siteId={scan.site_id}
+          discoveredPages={scan.total_violations + scan.passes}
+        />
+      )}
+
       {/* Scan Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
@@ -542,9 +564,16 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
           tabIndex={-1}
           className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            Issues Summary
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {showEnterpriseBanner ? 'Sample Report - Top Issues' : 'Issues Summary'}
+            </h2>
+            {showEnterpriseBanner && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Showing up to 50 issues
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {['critical', 'serious', 'moderate', 'minor'].map((severity) => (
               <div key={severity} className="text-center">
