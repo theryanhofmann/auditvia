@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { X, Check, AlertTriangle, XCircle, ChevronDown, ChevronUp, Eye, Hand, Brain, Ear } from 'lucide-react'
+import { StatusIcon, type StatusType } from '@/app/components/ui/StatusIcon'
 
 interface ScanIssue {
   id: number
@@ -115,17 +116,27 @@ const AFFECTED_USER_CONFIG = {
   hearing: { icon: Ear, label: 'Hearing Impaired', color: 'bg-green-100 text-green-700' }
 }
 
-export function AnimatedScanModal({ 
-  isOpen, 
-  siteUrl, 
+// Categories being checked during scan
+const SCAN_CATEGORIES = [
+  { id: 'clickables', name: 'Clickables', description: 'Buttons and links' },
+  { id: 'titles', name: 'Titles', description: 'Headings and page structure' },
+  { id: 'graphics', name: 'Graphics', description: 'Images and media' },
+  { id: 'forms', name: 'Forms', description: 'Input fields and labels' },
+  { id: 'contrast', name: 'Contrast', description: 'Text visibility' },
+  { id: 'general', name: 'General', description: 'Other accessibility checks' }
+]
+
+export function AnimatedScanModal({
+  isOpen,
+  siteUrl,
   siteName,
   siteScreenshot,
   onClose,
-  onAskAI,
+  onAskAI: _onAskAI,
   scanId,
-  teamId,
-  siteId,
-  mode = 'founder'
+  teamId: _teamId,
+  siteId: _siteId,
+  mode: _mode = 'founder'
 }: AnimatedScanModalProps) {
   const [isScanning, setIsScanning] = useState(true)
   const [scanProgress, setScanProgress] = useState(0)
@@ -133,6 +144,8 @@ export function AnimatedScanModal({
   const [totalIssues, setTotalIssues] = useState(0)
   const [categories, setCategories] = useState<IssueCategory[]>([])
   const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set())
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0)
+  const [categoryStatuses, setCategoryStatuses] = useState<Record<string, StatusType>>({})
 
   useEffect(() => {
     if (!isOpen || !scanId) return
@@ -140,7 +153,9 @@ export function AnimatedScanModal({
     // Simulate scanning progress
     setIsScanning(true)
     setScanProgress(0)
-    
+    setCurrentCategoryIndex(0)
+    setCategoryStatuses({})
+
     const progressInterval = setInterval(() => {
       setScanProgress(prev => {
         if (prev >= 90) {
@@ -150,6 +165,27 @@ export function AnimatedScanModal({
         return prev + 10
       })
     }, 400)
+
+    // Animate through categories
+    const categoryInterval = setInterval(() => {
+      setCurrentCategoryIndex(prev => {
+        const next = prev + 1
+        if (next >= SCAN_CATEGORIES.length) {
+          clearInterval(categoryInterval)
+          return prev
+        }
+
+        // Mark previous category as pending (will be resolved when scan completes)
+        if (prev < SCAN_CATEGORIES.length) {
+          setCategoryStatuses(statuses => ({
+            ...statuses,
+            [SCAN_CATEGORIES[prev].id]: 'pending'
+          }))
+        }
+
+        return next
+      })
+    }, 1000) // Progress through one category per second
 
     let pollInterval: NodeJS.Timeout | null = null
 
@@ -173,10 +209,10 @@ export function AnimatedScanModal({
             // Process issues into categories
             const issuesByCategory = processIssuesIntoCategories(data.issues || [])
             setCategories(issuesByCategory)
-            
+
             const total = data.totalIssues || 0
             setTotalIssues(total)
-            
+
             // Determine verdict
             const criticalCount = data.issues?.filter((i: ScanIssue) => i.severity === 'critical' || i.severity === 'serious').length || 0
             if (total === 0) {
@@ -186,7 +222,19 @@ export function AnimatedScanModal({
             } else {
               setVerdict('at-risk')
             }
-            
+
+            // Set final category statuses based on results
+            const finalStatuses: Record<string, StatusType> = {}
+            SCAN_CATEGORIES.forEach(cat => {
+              const categoryIssues = issuesByCategory.find(c => c.id === cat.id)
+              if (categoryIssues && categoryIssues.failedCount > 0) {
+                finalStatuses[cat.id] = 'fail'
+              } else {
+                finalStatuses[cat.id] = 'pass'
+              }
+            })
+            setCategoryStatuses(finalStatuses)
+
             setScanProgress(100)
             setIsScanning(false)
           } else {
@@ -208,6 +256,7 @@ export function AnimatedScanModal({
 
     return () => {
       clearInterval(progressInterval)
+      clearInterval(categoryInterval)
       if (pollInterval) clearInterval(pollInterval)
     }
   }, [isOpen, scanId])
@@ -279,7 +328,7 @@ export function AnimatedScanModal({
     return config?.affectedUsers || ['vision']
   }
 
-  const getSeverityColor = (severity: string) => {
+  const _getSeverityColor = (severity: string) => {
     const colors = {
       critical: 'bg-red-50 border-red-200',
       serious: 'bg-orange-50 border-orange-200',
@@ -289,7 +338,7 @@ export function AnimatedScanModal({
     return colors[severity as keyof typeof colors] || colors.minor
   }
 
-  const getSeverityBadgeColor = (severity: string) => {
+  const _getSeverityBadgeColor = (severity: string) => {
     const colors = {
       critical: 'bg-red-100 text-red-700',
       serious: 'bg-orange-100 text-orange-700',
@@ -557,11 +606,74 @@ export function AnimatedScanModal({
                   </div>
                 </div>
               </div>
-              
+
+              {/* Animated Category Checklist */}
+              <div className="max-w-2xl mx-auto bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-6">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                  {currentCategoryIndex >= SCAN_CATEGORIES.length
+                    ? 'Finalizing scan...'
+                    : `Evaluating ${SCAN_CATEGORIES[currentCategoryIndex]?.name}...`}
+                </h4>
+
+                <div className="space-y-2">
+                  {SCAN_CATEGORIES.map((category, index) => {
+                    const status: StatusType =
+                      categoryStatuses[category.id] ||
+                      (index < currentCategoryIndex ? 'pending' :
+                       index === currentCategoryIndex ? 'pending' :
+                       'pending')
+
+                    const isActive = index === currentCategoryIndex
+                    const isComplete = categoryStatuses[category.id] === 'pass' || categoryStatuses[category.id] === 'fail'
+
+                    return (
+                      <div
+                        key={category.id}
+                        className={`
+                          flex items-center gap-3 px-3 py-2 rounded transition-all duration-300
+                          ${isActive ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}
+                          ${isComplete ? 'opacity-100' : index < currentCategoryIndex ? 'opacity-70' : 'opacity-40'}
+                        `}
+                        style={{
+                          transform: isActive ? 'scale(1.02)' : 'scale(1)',
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        {/* Status Icon with animation */}
+                        <div className={`flex-shrink-0 ${isActive ? 'animate-pulse' : ''}`}>
+                          <StatusIcon
+                            status={status}
+                            size="md"
+                            showTooltip={false}
+                          />
+                        </div>
+
+                        {/* Category Name */}
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-medium ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                            {category.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {category.description}
+                          </div>
+                        </div>
+
+                        {/* Loading Indicator for active category */}
+                        {isActive && !isComplete && (
+                          <div className="flex-shrink-0">
+                            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* Progress Bar */}
               <div className="max-w-md mx-auto">
                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-blue-600 transition-all duration-300 ease-out"
                     style={{ width: `${scanProgress}%` }}
                   />
@@ -646,7 +758,7 @@ export function AnimatedScanModal({
 
                     {/* Issues List */}
                     <div className="divide-y divide-gray-100">
-                      {category.issues.map((issue, idx) => {
+                      {category.issues.map((issue, _idx) => {
                         const isExpanded = expandedIssues.has(issue.id)
                         const affectedUsers = getAffectedUsers(issue)
                         
