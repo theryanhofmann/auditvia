@@ -6,6 +6,10 @@
 - Scan profiles foundation: QUICK/SMART/DEEP types and budgets (#PR1)
 - Profile selection logic based on user tier and site size (#PR1)
 - Feature flags for scan profiles and enterprise gating (#PR1)
+- Enterprise site detection with URL and time-based heuristics (#PR2)
+- Scan lifecycle integration for enterprise gating (#PR2)
+- Telemetry event `enterprise.detect.v1` for detection tracking (#PR2)
+- Status `incomplete_enterprise_gate` for gated scans (#PR2)
 
 ## [1.0.0] - 2025-08-02
 
