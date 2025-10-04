@@ -1,38 +1,38 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
   Download,
   Save,
   Mail,
-  Filter,
+  
   TrendingUp,
   TrendingDown,
   Minus,
   Info,
   MoreVertical,
-  ChevronRight,
-  X,
-  Calendar,
-  Globe,
+  
+  
+  
+  
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Tag,
+  
   Search,
   Loader2,
-  ArrowUpRight,
-  ArrowDownRight,
-  Target,
+  
+  
+  
   Zap,
   Clock,
   BarChart3,
-  PieChart,
-  Activity,
-  FileText,
-  Github,
-  Layers,
+  
+  
+  
+  
+  
   Shield
 } from 'lucide-react'
 import {
@@ -42,8 +42,8 @@ import {
   Area,
   BarChart,
   Bar,
-  ScatterChart,
-  Scatter,
+
+
   PieChart as RechartsPie,
   Pie,
   Cell,
@@ -52,8 +52,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  ReferenceLine
+  ResponsiveContainer
 } from 'recharts'
 
 // Types
@@ -134,11 +133,6 @@ function formatCurrency(num: number): string {
   return `$${num.toLocaleString('en-US')}`
 }
 
-// Format percentage
-function formatPercent(num: number): string {
-  return `${num.toFixed(1)}%`
-}
-
 // Time ago helper
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -165,7 +159,7 @@ export function AnalyticsClient() {
   )
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
   const [compareMode, setCompareMode] = useState(false)
-  const [selectedModule, setSelectedModule] = useState<string | null>(searchParams.get('module'))
+  const [selectedModule] = useState<string | null>(searchParams.get('module'))
 
   // Real data from API
   const [kpis, setKpis] = useState<KPI[]>([])
@@ -173,7 +167,7 @@ export function AnalyticsClient() {
   const [topRules, setTopRules] = useState<TopRule[]>([])
   const [sitesPerformance, setSitesPerformance] = useState<any[]>([])
 
-  const [modules, setModules] = useState<ChartModule[]>([
+  const [_modules] = useState<ChartModule[]>([
     { id: 'violations-trend', title: 'Violations Over Time', description: 'Stacked by severity', type: 'area', pinned: false, order: 1 },
     { id: 'fix-throughput', title: 'Fix Throughput vs. Intake', description: 'Created vs closed', type: 'line', pinned: false, order: 2 },
     { id: 'risk-reduced', title: 'Risk Reduced ($)', description: 'By severity over time', type: 'bar', pinned: false, order: 3 },
@@ -532,7 +526,7 @@ export function AnalyticsClient() {
 }
 
 // Chart Module Components
-function ViolationsTrendModule({ compareMode, data }: { compareMode: boolean; data: TimeSeriesData[] }) {
+function ViolationsTrendModule({ compareMode: _compareMode, data }: { compareMode: boolean; data: TimeSeriesData[] }) {
   if (!data || data.length === 0) {
     return (
       <ChartCard
@@ -569,7 +563,7 @@ function ViolationsTrendModule({ compareMode, data }: { compareMode: boolean; da
   )
 }
 
-function FixThroughputModule({ compareMode, data }: { compareMode: boolean; data: TimeSeriesData[] }) {
+function FixThroughputModule({ compareMode: _compareMode, data }: { compareMode: boolean; data: TimeSeriesData[] }) {
   if (!data || data.length === 0) {
     return (
       <ChartCard
@@ -606,7 +600,7 @@ function FixThroughputModule({ compareMode, data }: { compareMode: boolean; data
   )
 }
 
-function RiskReducedModule({ compareMode }: { compareMode: boolean }) {
+function RiskReducedModule({ compareMode: _compareMode }: { compareMode: boolean }) {
   const data: RiskData[] = [
     { date: '2024-09-01', riskCreated: 12500, riskReduced: 8200, cumulative: 8200 },
     { date: '2024-09-08', riskCreated: 14200, riskReduced: 9800, cumulative: 18000 },

@@ -14,7 +14,7 @@ interface RulesTableClientProps {
 }
 
 export function RulesTableClient({ teamId }: RulesTableClientProps) {
-  const router = useRouter()
+  const _router = useRouter()
   const searchParams = useSearchParams()
   
   const [searchQuery, setSearchQuery] = useState('')

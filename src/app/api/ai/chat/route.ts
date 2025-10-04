@@ -636,7 +636,7 @@ function handleEmailRequest(message: string, context: any, mode: 'founder' | 'de
 /**
  * Handle code generation requests
  */
-function handleCodeRequest(message: string, context: any, mode: 'founder' | 'developer') {
+function handleCodeRequest(message: string, context: any, _mode: 'founder' | 'developer') {
   const topIssue = context.topIssues[0]
 
   console.log('💻 [Code] Generating fix:', { hasIssue: !!topIssue, rule: topIssue?.rule })
@@ -774,7 +774,7 @@ function getLanguage(platform: string): string {
   return languages[platform] || 'html'
 }
 
-function generateCodeFix(issue: any, platform: string): string {
+function generateCodeFix(issue: any, _platform: string): string {
   // Basic code generation - will be enhanced with AI
   const fixes: Record<string, string> = {
     'image-alt': `<img src="..." alt="Descriptive text about the image" />`,

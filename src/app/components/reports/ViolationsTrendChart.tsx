@@ -1,7 +1,7 @@
 'use client'
 
 import { Download } from 'lucide-react'
-import { exportToCSV, getSeverityColor } from '@/lib/reports-utils'
+import { exportToCSV } from '@/lib/reports-utils'
 import type { TrendDataPoint } from '@/types/reports'
 
 interface ViolationsTrendChartProps {

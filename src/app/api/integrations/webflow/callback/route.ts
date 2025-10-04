@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     )
 
     // Store team-level connection
-    const { data: connection, error: insertError } = await supabase
+    const { error: insertError } = await supabase
       .from('platform_connections')
       .insert({
         team_id: teamId,

@@ -147,7 +147,7 @@ export class AccessibilityScanner {
           // Log that we're starting the scan
           console.log('Starting axe.run...')
           
-          // @ts-ignore - axe is injected at runtime
+          // @ts-expect-error - axe is injected at runtime
           window.axe.run(document, {
             resultTypes: ['violations', 'passes', 'inapplicable', 'incomplete'],
             runOnly: {

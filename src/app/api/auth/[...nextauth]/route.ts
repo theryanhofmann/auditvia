@@ -156,7 +156,7 @@ export const authOptions: NextAuthOptions = {
     debug(code, metadata) { console.debug('NextAuth debug', code, metadata); },
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user }) {
       if (!user.email) {
         console.error('GitHub login failed: No email provided')
         return false

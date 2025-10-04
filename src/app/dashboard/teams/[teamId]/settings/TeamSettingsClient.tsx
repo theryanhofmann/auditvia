@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CreditCard, Star, Loader2, Crown, CheckCircle, ExternalLink } from 'lucide-react'
+import {   Loader2, Crown, CheckCircle, ExternalLink } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ProUpgradeButton, ProBadge, ProStatusIndicator } from '@/app/components/ui/ProUpgradeButton'
 import { Button } from '@/app/components/ui/button'
@@ -47,7 +47,7 @@ export function TeamSettingsClient({
   const proFeatures = getProFeaturesStatus(team as any) // Cast to match expected type
   const testBanner = testModeHelpers.getTestModeBanner()
 
-  const handleUpgrade = async () => {
+  const _handleUpgrade = async () => {
     if (isUpgrading) return
 
     try {

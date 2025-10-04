@@ -13,13 +13,6 @@ interface SchemaRecoveryResult {
   retryAfterMs?: number
 }
 
-interface DatabaseError {
-  code?: string
-  message?: string
-  details?: string
-  hint?: string
-}
-
 /**
  * Detects if an error is related to schema cache issues
  */
@@ -148,7 +141,7 @@ async function refreshSupabaseHostedSchema(
       console.log('🔄 [schema-recovery] ✅ Supabase schema refreshed via PostgREST admin endpoint')
       return { success: true, method: 'postgrest_admin', retryAfterMs: 1000 }
     }
-  } catch (error) {
+  } catch (_error) {
     console.warn('🔄 [schema-recovery] PostgREST admin endpoint failed, trying alternative methods')
   }
 
@@ -167,7 +160,7 @@ async function refreshSupabaseHostedSchema(
       console.log('🔄 [schema-recovery] ✅ Supabase schema refresh attempted via RPC')
       return { success: true, method: 'supabase_rpc', retryAfterMs: 2000 }
     }
-  } catch (error) {
+  } catch (_error) {
     console.warn('🔄 [schema-recovery] RPC method failed')
   }
 

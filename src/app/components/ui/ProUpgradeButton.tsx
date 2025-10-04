@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/app/components/ui/button'
-import { Crown, Loader2, Zap } from 'lucide-react'
+import { Crown, Loader2 } from 'lucide-react'
 import { useTeam } from '@/app/context/TeamContext'
 import { toast } from 'sonner'
 
@@ -25,7 +25,7 @@ async function getCachedTeamData(teamId: string) {
         teamDataCache.set(teamId, data.team)
         return data.team
       }
-    } catch (error) {
+    } catch {
       // Invalid cache, ignore
     }
   }
@@ -41,7 +41,7 @@ function setCachedTeamData(teamId: string, teamData: any) {
       team: teamData,
       timestamp: Date.now()
     }))
-  } catch (error) {
+  } catch {
     // localStorage not available or quota exceeded, ignore
   }
 }

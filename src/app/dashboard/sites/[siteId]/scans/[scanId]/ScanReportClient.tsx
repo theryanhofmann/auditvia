@@ -16,7 +16,7 @@ interface ScanReportClientProps {
   // ... other props
 }
 
-export function ScanReportClient({ scan, ...props }: ScanReportClientProps) {
+export function ScanReportClient({ scan, ...props }: ScanReportClientProps & { [key: string]: unknown }) {
   const { isLoading: isLoadingPro, hasPro } = useTeamPro(scan.site.team_id)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
   const [suggestions, setSuggestions] = useState<any[] | null>(null)

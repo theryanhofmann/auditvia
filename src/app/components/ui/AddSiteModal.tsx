@@ -21,7 +21,7 @@ export function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModalProps) 
   const [urlError, setUrlError] = useState('')
   const [customDomainError, setCustomDomainError] = useState('')
   const { data: _session, status } = useSession()
-  const { teamId, loading: _teamLoading } = useTeam()
+  const { teamId: _teamId, loading: teamLoading } = useTeam()
 
   const validateUrl = (inputUrl: string): boolean => {
     setUrlError('')

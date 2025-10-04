@@ -127,7 +127,7 @@ export async function getCurrentTeamId(): Promise<TeamResult | null> {
     }
 
     // Create team (trigger will automatically create membership)
-    const { data: newTeam, error: teamError } = await supabaseAdmin
+    const { data: _newTeam, error: teamError } = await supabaseAdmin
       .from('teams')
       .insert({
         id: teamId,

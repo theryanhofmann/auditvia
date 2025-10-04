@@ -11,7 +11,7 @@ import type { Database } from '@/app/types/database'
 import { getSchemaCapabilities } from './schema-capabilities'
 import { 
   refreshSchemaCache, 
-  isSchemaCacheError, 
+   
   classifyDatabaseError,
   calculateBackoffDelay,
   sleep,

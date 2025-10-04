@@ -81,7 +81,7 @@ export function TeamSwitcher() {
           console.error('Error setting default team:', error)
         }
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load teams',

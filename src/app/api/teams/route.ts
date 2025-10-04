@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createClient } from '@/app/lib/supabase/server'
-import type { Database } from '@/app/types/database'
 
 // Force Node.js runtime for NextAuth session support
 export const runtime = 'nodejs'

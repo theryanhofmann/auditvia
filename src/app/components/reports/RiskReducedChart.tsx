@@ -1,7 +1,7 @@
 'use client'
 
 import { Download, TrendingUp, TrendingDown } from 'lucide-react'
-import { exportToCSV, formatCurrency, getSeverityColor } from '@/lib/reports-utils'
+import { exportToCSV, formatCurrency } from '@/lib/reports-utils'
 import type { RiskData } from '@/types/reports'
 
 interface RiskReducedChartProps {

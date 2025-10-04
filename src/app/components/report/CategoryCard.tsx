@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { 
-  ChevronDown, 
+import {
+  ChevronDown,
   ChevronRight,
   MousePointerClick,
   Type,
@@ -15,6 +15,7 @@ import {
   Info,
   ArrowRight
 } from 'lucide-react'
+import { getIssueTitle } from '@/lib/issue-explanations'
 
 interface CategoryCardProps {
   category: string
@@ -74,14 +75,14 @@ export function CategoryCard({
   const impacts = disabilityImpacts[category] || []
 
   // Severity dot styling (small dots instead of badges)
-  const getSeverityDot = (severity: string) => {
-    const styles = {
+  const getSeverityDot = (severity: string): string => {
+    const styles: Record<string, string> = {
       critical: 'bg-red-500',
       serious: 'bg-orange-500',
       moderate: 'bg-yellow-500',
       minor: 'bg-gray-400'
     }
-    return styles[severity as keyof typeof styles] || styles.minor
+    return styles[severity] || styles.minor
   }
 
   // Severity badge styling
@@ -99,6 +100,7 @@ export function CategoryCard({
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-all duration-200">
       {/* Header */}
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full px-5 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
       >
@@ -178,6 +180,7 @@ export function CategoryCard({
           <div className="divide-y divide-gray-200">
             {issues.map((issue, idx) => (
               <button
+                type="button"
                 key={idx}
                 onClick={() => onIssueClick(issue)}
                 className="w-full px-5 py-4 text-left hover:bg-white transition-colors flex items-start gap-4 group"
@@ -194,7 +197,7 @@ export function CategoryCard({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h4 className="text-sm font-medium text-gray-900 leading-snug">
-                      {issue.description || issue.help || 'Accessibility issue detected'}
+                      {getIssueTitle(issue.id || issue.rule_id || issue.rule, issue.description || issue.help)}
                     </h4>
                     <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-0.5" />
                   </div>
@@ -236,7 +239,7 @@ export function CategoryCard({
   )
 }
 
-function CheckIcon(props: any) {
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}

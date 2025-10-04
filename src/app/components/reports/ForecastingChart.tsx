@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react'
 import { TrendingUp, Info } from 'lucide-react'
-import { getSeverityColor } from '@/lib/reports-utils'
 import type { TrendDataPoint } from '@/types/reports'
 
 interface ForecastingChartProps {
@@ -179,7 +178,7 @@ export function ForecastingChart({ data, loading, onExport }: ForecastingChartPr
             </span>
           </div>
 
-          {chartData.map((point, idx) => {
+          {chartData.map((point, _idx) => {
             const total = point.total_violations
             const heightPercent = (total / maxValue) * 100
 

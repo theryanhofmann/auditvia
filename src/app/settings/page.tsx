@@ -8,7 +8,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 
 export default function SettingsPage() {
   const { data: session, status } = useSession()
-  const router = useRouter()
+  const _router = useRouter()
 
   // Protect route - redirect to login if not authenticated
   if (status === 'unauthenticated') {

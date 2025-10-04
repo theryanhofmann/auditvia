@@ -4,7 +4,6 @@ import type { Database } from '@/app/types/database'
 import { AccessibilityScanner, type ScanResult } from '../../../../scripts/runA11yScan'
 import { runDeepScan, type DeepScanResult } from '../../../../scripts/runDeepScan'
 import { classifyIssue } from '../../../../scripts/scanner/issueTiers'
-import type { Result } from 'axe-core'
 import { sendScanCompletionEmail } from '@/app/lib/email/sendScanCompletionEmail'
 import type { Issue } from '@/app/types/email'
 import { auth } from '@/auth'
@@ -77,7 +76,7 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
     
     // Parse request body
     // Default to 'deep' scan for comprehensive coverage
-    const { url, siteId, userId, waitForSelector, scanProfile = 'deep' } = await request.json() as AuditRequest
+    const { url, siteId, waitForSelector, scanProfile = 'deep' } = await request.json() as AuditRequest
 
     // Validate required fields
     if (!url || !siteId) {
@@ -127,7 +126,7 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
       }, error!.httpStatus)
     }
 
-    const { role, site } = ownershipResult
+    const { role } = ownershipResult
     console.log(`🔒 [audit] ✅ Site ownership verified - user has role: ${role}`)
 
     // Playwright preflight check - fail fast if browsers not available
@@ -191,14 +190,6 @@ export async function POST(request: Request): Promise<NextResponse<ScanResponse>
     console.log('✅ Scan record created:', scanId)
 
     // Return scanId immediately and run the scan asynchronously
-    const scanMetadata = {
-      scanId,
-      siteId,
-      userId: session.user.id,
-      targetUrl: url,
-      timestamp: new Date().toISOString(),
-      auditDevMode: process.env.AUDIT_DEV_MODE === 'true'
-    }
     
     console.log(`🧵 [job] started - scanId: ${scanId}, siteId: ${siteId}, profile: ${scanProfile}`)
     
@@ -421,8 +412,7 @@ async function runScanJob(
           // For Quick Scan, use traditional storage
           const issuePromises = results.violations.map(async (violation: any) => {
             // Get WCAG rule from tags
-            const wcagTag = violation.tags?.find((tag: string) => tag.startsWith('wcag'))
-            const wcagRule = wcagTag ? `WCAG ${wcagTag.slice(4, -1)}.${wcagTag.slice(-1).toUpperCase()}` : null
+            const _wcagTag = violation.tags?.find((tag: string) => tag.startsWith('wcag'))
             
             // Classify the issue
             const classification = classifyIssue(violation.id)
@@ -681,7 +671,7 @@ async function sendCompletionEmailAsync(
   siteId: string,
   scan: any,
   score: number | null,
-  results: any
+  _results: any
 ): Promise<void> {
   try {
     console.log('📧 Attempting to send completion email...')

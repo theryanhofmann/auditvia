@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { 
+import {
   Shield,
-  TrendingUp,
   CheckCircle2,
   AlertTriangle,
   ArrowRight,

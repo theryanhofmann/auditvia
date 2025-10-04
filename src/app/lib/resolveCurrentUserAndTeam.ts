@@ -149,7 +149,7 @@ export async function resolveCurrentUserAndTeam(): Promise<ResolverResult | null
       teamId = crypto.randomUUID()
       teamName = authUser.name ? `${authUser.name}'s Team` : 'My Team'
 
-      const { data: newTeam, error: teamError } = await supabase
+      const { data: _newTeam, error: teamError } = await supabase
         .from('teams')
         .insert({
           id: teamId,

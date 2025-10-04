@@ -13,11 +13,11 @@ import {
   Eye,
   UserCheck,
   Clock,
-  ChevronRight,
+  
   Loader2,
   Check,
-  AlertTriangle,
-  Trash2,
+  
+  
   RefreshCw,
   Activity
 } from 'lucide-react'
@@ -65,7 +65,7 @@ function timeAgo(date: string | null): string {
 }
 
 export function TeamClient() {
-  const router = useRouter()
+  const _router = useRouter()
   
   // State
   const [loading, setLoading] = useState(true)
@@ -77,7 +77,7 @@ export function TeamClient() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null)
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; action: string; member?: TeamMember }>({ open: false, action: '' })
+  const [_confirmDialog] = useState<{ open: boolean; action: string; member?: TeamMember }>({ open: false, action: '' })
 
   // Fetch data
   useEffect(() => {
@@ -152,7 +152,7 @@ export function TeamClient() {
   }
 
   // Action handlers
-  const handleRoleChange = async (userId: string, newRole: string) => {
+  const _handleRoleChange = async (userId: string, newRole: string) => {
     try {
       const response = await fetch('/api/team/role', {
         method: 'POST',
@@ -175,7 +175,7 @@ export function TeamClient() {
     }
   }
 
-  const handleRemoveMember = async (userId: string) => {
+  const _handleRemoveMember = async (userId: string) => {
     if (!confirm('Are you sure you want to remove this member from the team?')) {
       return
     }
@@ -460,7 +460,7 @@ export function TeamClient() {
                           currentUserRole={currentUserRole}
                           members={members}
                           onSelect={setSelectedMember}
-                          onRoleChange={(role) => {/* TODO: Implement */}}
+                          onRoleChange={(_role) => {/* TODO: Implement */}}
                           onRemove={() => {/* TODO: Implement */}}
                         />
                       ))}
@@ -529,8 +529,8 @@ function MemberRow({
   currentUserRole,
   members,
   onSelect,
-  onRoleChange,
-  onRemove
+  onRoleChange: _onRoleChange,
+  onRemove: _onRemove
 }: {
   member: TeamMember
   idx: number

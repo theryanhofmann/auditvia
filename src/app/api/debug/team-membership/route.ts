@@ -7,7 +7,7 @@ import { auth } from '@/auth'
  * Debug endpoint to check team membership
  * Only available in development
  */
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   // Only allow in development
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not available in production' }, { status: 404 })

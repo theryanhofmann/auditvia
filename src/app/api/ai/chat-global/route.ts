@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { message, context, conversationHistory = [] } = body
+    const { message, context } = body
 
     console.log('🤖 [Global AI Chat] Request:', {
       userId: session.user.id,
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Build system prompt based on current page context
-    const systemPrompt = buildGlobalSystemPrompt(context)
+    buildGlobalSystemPrompt(context)
 
     // Check for OpenAI key
     const openAiKey = process.env.OPENAI_API_KEY

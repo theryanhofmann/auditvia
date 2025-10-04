@@ -2,17 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  TrendingUp, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
+import {
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
   ArrowRight,
   Play,
   FileText,
   Github,
-  BarChart3,
-  Zap
+  BarChart3
 } from 'lucide-react'
 import { formatNumber } from '@/lib/reports-utils'
 import { calculateVerdict, type VerdictResult } from '@/lib/verdict-system'
@@ -137,18 +136,6 @@ export function OverviewDashboard({ teamId, sites }: OverviewDashboardProps) {
       action: () => router.push('/dashboard/reports')
     }
   ]
-
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-400'
-    if (score >= 70) return 'text-amber-400'
-    return 'text-red-400'
-  }
-
-  const getScoreStatus = (score: number) => {
-    if (score >= 90) return 'Excellent'
-    if (score >= 70) return 'Good'
-    return 'Needs Attention'
-  }
 
   if (loading) {
     return (

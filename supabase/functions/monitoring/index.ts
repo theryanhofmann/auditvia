@@ -32,7 +32,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-Deno.serve(async (req) => {
+Deno.serve(async (_req) => {
   try {
     // Get sites due for monitoring
     const { data: sites, error: sitesError } = await supabase

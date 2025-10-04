@@ -9,7 +9,6 @@ import { createClient } from '@supabase/supabase-js'
 import { startOfMonth, endOfMonth, subMonths, subDays } from 'date-fns'
 
 type Site = Database['public']['Tables']['sites']['Row']
-type Scan = Database['public']['Tables']['scans']['Row']
 
 // Initialize Supabase client
 const supabase = createClient<Database>(

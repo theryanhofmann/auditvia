@@ -18,9 +18,9 @@ interface ScanRequestBody {
   url?: string // Optional override for testing
 }
 
-async function getOrCreateUser(supabase: TypedSupabaseClient, githubId: string): Promise<{ id: string }> {
+async function _getOrCreateUser(supabase: TypedSupabaseClient, githubId: string): Promise<{ id: string }> {
   console.log('🔍 Looking up user with GitHub ID:', githubId)
-  
+
   // Try to find existing user
   const { data: existingUser, error: fetchError } = await supabase
     .from('users')
@@ -39,7 +39,7 @@ async function getOrCreateUser(supabase: TypedSupabaseClient, githubId: string):
   }
 
   console.log('👤 Creating new user for GitHub ID:', githubId)
-  
+
   // Create new user if not found
   const { data: newUser, error: createError } = await supabase
     .from('users')
@@ -56,7 +56,7 @@ async function getOrCreateUser(supabase: TypedSupabaseClient, githubId: string):
   return newUser
 }
 
-async function verifySiteOwnership(
+async function _verifySiteOwnership(
   supabase: TypedSupabaseClient,
   siteId: string,
   userId: string

@@ -83,7 +83,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (body) {
         requestData = JSON.parse(body)
       }
-    } catch (parseError) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  * 
  * Gets scan health metrics and identifies stuck scans without cleaning them
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(_request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now()
 
   try {
@@ -272,7 +272,7 @@ export async function PUT(
         const data = JSON.parse(body)
         reason = data.reason || reason
       }
-    } catch (parseError) {
+    } catch {
       // Use default reason if parsing fails
     }
 

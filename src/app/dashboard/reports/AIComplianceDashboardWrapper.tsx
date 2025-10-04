@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { AIComplianceDashboard } from '@/app/components/reports/AIComplianceDashboard'
 import {
   useKPIs,
@@ -15,11 +15,11 @@ interface AIComplianceDashboardWrapperProps {
   sites: Array<{ id: string; name: string }>
 }
 
-export function AIComplianceDashboardWrapper({ 
+export function AIComplianceDashboardWrapper({
   teamId,
-  sites 
+  sites: _sites
 }: AIComplianceDashboardWrapperProps) {
-  const [filters, setFilters] = useState<ReportFilters>(() => {
+  const [filters] = useState<ReportFilters>(() => {
     const { startDate, endDate } = getDateRangeFromTimeRange('30d')
     return {
       teamId,

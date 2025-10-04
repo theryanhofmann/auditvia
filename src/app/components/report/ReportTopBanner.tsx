@@ -39,7 +39,14 @@ export function ReportTopBanner({
     seriousCount
   })
 
-  const verdictConfig = {
+  const verdictConfig: Record<string, {
+    icon: typeof Check | typeof AlertTriangle | typeof XCircle;
+    iconColor: string;
+    bgColor: string;
+    borderColor: string;
+    textColor: string;
+    statusDot: string;
+  }> = {
     'compliant': {
       icon: Check,
       iconColor: 'text-green-600',
@@ -159,7 +166,7 @@ export function ReportTopBanner({
                       Recommended Actions
                     </div>
                     <ul className="space-y-1.5">
-                      {verdict.recommendations.map((rec, idx) => (
+                      {verdict.recommendations.map((rec: string, idx: number) => (
                         <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
                           <span className="text-gray-400 mt-0.5 flex-shrink-0">•</span>
                           <span>{rec}</span>

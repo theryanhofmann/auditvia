@@ -4,6 +4,9 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
+  "deno.enable": false,
+  "deno.lint": false,
+  "deno.unstable": false,
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "claude.enabled": true,

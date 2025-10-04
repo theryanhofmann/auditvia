@@ -3,6 +3,7 @@ import './globals.css'
 import ClientProviders from './components/providers/ClientProviders'
 import Script from 'next/script'
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -40,7 +41,9 @@ export default function RootLayout({
         </Script>
       </head>
       <body className={`${inter.className} bg-gray-900`} suppressHydrationWarning>
-        <ClientProviders>{children}</ClientProviders>
+        <Suspense fallback={null}>
+          <ClientProviders>{children}</ClientProviders>
+        </Suspense>
       </body>
     </html>
   )

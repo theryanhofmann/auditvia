@@ -106,6 +106,7 @@ export function DashboardSidebar() {
             </p>
           </div>
           <button
+            type="button"
             onClick={() => signOut()}
             className="p-2 rounded-lg hover:bg-white/10 transition-all duration-200 group"
             title="Sign out"

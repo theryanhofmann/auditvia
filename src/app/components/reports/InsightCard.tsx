@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { TrendingUp, Award, AlertTriangle, Target, ArrowRight, Sparkles } from 'lucide-react'
 import { Sparkline } from './Sparkline'
 import { DeltaBadge } from './DeltaBadge'
-import { designTokens, focusRing } from './design-tokens'
+import { focusRing } from './design-tokens'
 
 export interface Insight {
   id: string

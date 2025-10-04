@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, ExternalLink } from 'lucide-react'
 import { ReactNode } from 'react'
-import { designTokens, focusRing } from './design-tokens'
+import { focusRing } from './design-tokens'
 
 interface RightSideDetailDrawerProps {
   isOpen: boolean

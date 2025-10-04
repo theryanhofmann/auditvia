@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveTeamForRequest } from '@/lib/team-resolution'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/notifications
  * Returns notifications for the current user's team
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     console.log('[Notifications API] Starting request')
     
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
  * Generate notifications from recent activity
  * This is a temporary implementation until we have a proper notifications table
  */
-async function generateNotificationsFromActivity(supabase: any, teamId: string, userId: string) {
+async function generateNotificationsFromActivity(supabase: SupabaseClient, teamId: string, _userId: string) {
   const notifications: any[] = []
 
   // First get all sites for this team
@@ -81,9 +81,9 @@ async function generateNotificationsFromActivity(supabase: any, teamId: string, 
 
   console.log('[Notifications] Found sites:', teamSites.length)
 
-  const siteIds = teamSites.map((s: any) => s.id)
+  const siteIds = teamSites.map((s: { id: string }) => s.id)
   const siteMap = new Map<string, { id: string; name: string | null; url: string }>(
-    teamSites.map((s: any) => [s.id, s as { id: string; name: string | null; url: string }])
+    teamSites.map((s: { id: string; name: string | null; url: string }) => [s.id, s as { id: string; name: string | null; url: string }])
   )
 
   // Fetch recent scans for team's sites
@@ -141,7 +141,7 @@ async function generateNotificationsFromActivity(supabase: any, teamId: string, 
 
   // Fetch critical/serious issues from recent scans
   if (recentScans && recentScans.length > 0) {
-    const scanIds = recentScans.map((s: any) => s.id)
+    const scanIds = recentScans.map((s: { id: string }) => s.id)
     
     const { data: criticalIssues } = await supabase
       .from('issues')
@@ -156,7 +156,7 @@ async function generateNotificationsFromActivity(supabase: any, teamId: string, 
       const issueGroups = new Map<string, any[]>()
 
       for (const issue of criticalIssues) {
-        const scan = recentScans.find((s: any) => s.id === issue.scan_id)
+        const scan = recentScans.find((s: { id: string }) => s.id === issue.scan_id)
         if (!scan) continue
 
         const site = siteMap.get(scan.site_id)

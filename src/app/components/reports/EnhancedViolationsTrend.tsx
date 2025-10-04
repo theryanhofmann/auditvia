@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Download, ZoomIn, Eye, EyeOff } from 'lucide-react'
+import { Download,   EyeOff } from 'lucide-react'
 import { exportToCSV } from '@/lib/reports-utils'
 import type { TrendDataPoint } from '@/types/reports'
 

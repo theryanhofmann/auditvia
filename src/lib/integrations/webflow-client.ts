@@ -289,7 +289,7 @@ export async function publishWebflowSite(siteId: string, accessToken: string): P
  */
 export async function generateWebflowFixPreviews(
   issues: any[],
-  connection: WebflowConnection
+  _connection: WebflowConnection
 ): Promise<WebflowFixPreview[]> {
   console.log(`🔍 [Webflow] Analyzing ${issues.length} issues for auto-fix potential`)
 

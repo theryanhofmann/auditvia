@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Calendar, Menu, X } from 'lucide-react'
+import { Calendar, Menu } from 'lucide-react'
 
 // Page title mapping
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
@@ -34,7 +33,6 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 
 export function DashboardTopNav() {
   const pathname = usePathname()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Hide top nav for pages with their own headers
   const pagesWithOwnHeaders = ['/dashboard/settings', '/dashboard', '/dashboard/reports', '/dashboard/violations', '/dashboard/sites', '/dashboard/analytics']

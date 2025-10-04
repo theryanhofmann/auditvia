@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Ticket, ChevronDown, Check, AlertCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { Ticket,   AlertCircle, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -231,7 +231,7 @@ export function CreateTicketsButton({
               {teamId ? (
                 <a
                   href={`/dashboard/teams/${teamId}/settings`}
-                  onClick={(e) => {
+                  onClick={(_e) => {
                     console.log('🎫 [CreateTicketsButton] Navigating to:', `/dashboard/teams/${teamId}/settings`)
                   }}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -396,7 +396,7 @@ export function CreateTicketsButton({
             </div>
 
             <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)] space-y-4">
-              {preview.map((ticket, i) => (
+              {preview.map((ticket) => (
                 <div
                   key={ticket.rule}
                   className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"

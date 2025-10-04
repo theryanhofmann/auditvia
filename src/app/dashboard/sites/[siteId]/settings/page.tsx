@@ -17,7 +17,7 @@ interface PageProps {
 
 export default async function SiteSettingsPage({ params, searchParams }: PageProps) {
   const { siteId } = await params
-  const { teamId: queryTeamId } = await searchParams
+  const { teamId: _queryTeamId } = await searchParams
   
   // Get session for user verification
   const session = await getServerSession(authOptions)

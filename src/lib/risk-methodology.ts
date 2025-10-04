@@ -304,7 +304,7 @@ export function getMethodologyExplanation(): {
  * Check if custom risk weights are configured for a team
  * (Foundation for future enterprise feature)
  */
-export async function getTeamRiskWeights(teamId: string): Promise<RiskWeights> {
+export async function getTeamRiskWeights(_teamId: string): Promise<RiskWeights> {
   // TODO: Implement database lookup for custom team risk weights
   // For now, return research-based defaults
   return RESEARCH_BASED_WEIGHTS

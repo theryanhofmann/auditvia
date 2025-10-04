@@ -60,7 +60,7 @@ export function TeamSettings({ teamId, isOwner, isAdmin }: TeamSettingsProps) {
       if (!response.ok) throw new Error('Failed to fetch members')
       const data = await response.json()
       setMembers(data)
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load team members',
@@ -89,7 +89,7 @@ export function TeamSettings({ teamId, isOwner, isAdmin }: TeamSettingsProps) {
 
       setInviteEmail('')
       setInviteRole('member')
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to send invitation',
@@ -112,7 +112,7 @@ export function TeamSettings({ teamId, isOwner, isAdmin }: TeamSettingsProps) {
       })
 
       fetchMembers()
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to remove member',
@@ -135,7 +135,7 @@ export function TeamSettings({ teamId, isOwner, isAdmin }: TeamSettingsProps) {
       })
 
       router.push('/dashboard')
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to delete team',
