@@ -207,6 +207,22 @@ export const scanAnalytics = {
     reason: 'url_threshold' | 'time_frontier';
   }) => {
     safeAnalytics('enterprise.detect.v1', params)
+  },
+
+  /**
+   * Crawl summary event (PR #3)
+   * Emitted at end of crawl with budget enforcement metrics
+   */
+  crawlSummary: (params: {
+    siteId: string;
+    scanId: string;
+    profile: 'QUICK' | 'SMART' | 'DEEP';
+    pagesCrawled: number;
+    discoveredUrls: number;
+    elapsedMinutes: number;
+    stoppedReason: 'budget' | 'maxDuration' | 'enterprise' | 'complete';
+  }) => {
+    safeAnalytics('crawl.summary.v1', params)
   }
 }
 

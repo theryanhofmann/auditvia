@@ -1,6 +1,7 @@
 /**
  * Deep Scan v1 Prototype - Main Orchestrator
  * Runs multi-page, multi-state accessibility scans with tier classification
+ * Enhanced with budget enforcement and telemetry (PR #3)
  */
 
 import { chromium, type Browser, type Page } from 'playwright'
@@ -9,11 +10,14 @@ import * as fs from 'fs'
 import { crawlPages, getScanProfileConfig } from './crawler/pageCrawler'
 import { testPageStates, type PageState } from './scanner/stateInteractions'
 import { classifyIssue, summarizeByTier } from './scanner/issueTiers'
+import type { ScanProfile } from '@/types/scan-profiles'
 
 export interface DeepScanOptions {
   url: string
-  scanProfile: 'quick' | 'standard' | 'deep'
+  scanProfile: 'quick' | 'standard' | 'deep' | ScanProfile
   timeout?: number
+  siteId?: string
+  scanId?: string
 }
 
 export interface DeepScanIssue {
@@ -44,16 +48,16 @@ export interface PageScanResult {
 export interface DeepScanResult {
   // Summary
   url: string
-  scanProfile: 'quick' | 'standard' | 'deep'
+  scanProfile: 'quick' | 'standard' | 'deep' | ScanProfile
   pagesScanned: number
   statesAudited: number
   totalIssues: number
   violationsCount: number
   advisoriesCount: number
-  
+
   // Per-page results
   pages: PageScanResult[]
-  
+
   // Metadata
   timestamp: string
   timeToScan: number
@@ -61,12 +65,18 @@ export interface DeepScanResult {
     name: string
     confidence: number
   }
-  
+
   // Screenshot for preview
   screenshot?: string // base64 encoded
-  
+
   // Aggregated issues (deduplicated)
   issues: DeepScanIssue[]
+
+  // Crawl metrics (PR #3)
+  crawlMetrics?: {
+    discoveredUrls: number
+    crawlTimeMs: number
+  }
 }
 
 export class DeepAccessibilityScanner {
@@ -96,8 +106,11 @@ export class DeepAccessibilityScanner {
 
       // Step 1: Crawl pages
       console.log('\n📡 Step 1: Crawling pages...')
+      const crawlStartTime = Date.now()
       const pagesToScan = await crawlPages(page, options.url, crawlConfig)
-      console.log(`✅ Found ${pagesToScan.length} pages to scan`)
+      const crawlEndTime = Date.now()
+      const crawlTimeMs = crawlEndTime - crawlStartTime
+      console.log(`✅ Found ${pagesToScan.length} pages to scan (${(crawlTimeMs / 1000).toFixed(2)}s)`)
 
       // Step 2: Scan each page with state testing
       console.log('\n🔬 Step 2: Scanning pages...')
@@ -131,8 +144,13 @@ export class DeepAccessibilityScanner {
             }
           }
 
-          // Test different states
-          const stateResult = await testPageStates(page, options.scanProfile)
+          // Test different states (convert to legacy format for state interactions)
+          const legacyProfile = options.scanProfile === 'QUICK' ? 'quick'
+            : options.scanProfile === 'SMART' ? 'standard'
+            : options.scanProfile === 'DEEP' ? 'deep'
+            : options.scanProfile as 'quick' | 'standard' | 'deep'
+
+          const stateResult = await testPageStates(page, legacyProfile)
           totalStates += stateResult.totalStates
           console.log(`✅ Tested ${stateResult.totalStates} states`)
 
@@ -199,7 +217,41 @@ export class DeepAccessibilityScanner {
         timeToScan,
         platform,
         screenshot: screenshotBase64,
-        issues: deduplicatedIssues
+        issues: deduplicatedIssues,
+        crawlMetrics: {
+          discoveredUrls: pagesToScan.length,
+          crawlTimeMs
+        }
+      }
+
+      // Emit crawl summary telemetry (PR #3)
+      if (options.siteId && options.scanId && crawlConfig.profile) {
+        try {
+          const { scanAnalytics } = await import('@/lib/safe-analytics')
+          const elapsedMinutes = crawlTimeMs / 1000 / 60
+
+          // Determine stop reason
+          let stopReason: 'budget' | 'maxDuration' | 'enterprise' | 'complete' = 'complete'
+          if (crawlConfig.budget) {
+            if (pagesToScan.length >= crawlConfig.budget.maxUrls) {
+              stopReason = 'budget'
+            } else if (crawlTimeMs >= crawlConfig.budget.maxDuration) {
+              stopReason = 'maxDuration'
+            }
+          }
+
+          scanAnalytics.crawlSummary({
+            siteId: options.siteId,
+            scanId: options.scanId,
+            profile: crawlConfig.profile,
+            pagesCrawled: pagesToScan.length,
+            discoveredUrls: pagesToScan.length,
+            elapsedMinutes,
+            stoppedReason: stopReason
+          })
+        } catch (telemetryError) {
+          console.warn('⚠️ Failed to emit crawl summary telemetry:', telemetryError)
+        }
       }
 
       console.log('\n✅ Deep Scan Complete!')
@@ -210,6 +262,7 @@ export class DeepAccessibilityScanner {
       console.log(`  Violations: ${result.violationsCount}`)
       console.log(`  Advisories: ${result.advisoriesCount}`)
       console.log(`Time: ${timeToScan.toFixed(2)}s`)
+      console.log(`Crawl time: ${(crawlTimeMs / 1000).toFixed(2)}s`)
 
       return result
     } catch (error) {

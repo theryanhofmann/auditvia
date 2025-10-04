@@ -10,6 +10,11 @@
 - Scan lifecycle integration for enterprise gating (#PR2)
 - Telemetry event `enterprise.detect.v1` for detection tracking (#PR2)
 - Status `incomplete_enterprise_gate` for gated scans (#PR2)
+- Budget enforcement in crawler with maxUrls and maxDuration caps (#PR3)
+- Per-page URL discovery cap (30 URLs) and frontier cap (2× maxUrls) (#PR3)
+- Database migration for `coverage_summary` JSONB column (#PR3)
+- Telemetry event `crawl.summary.v1` for crawl metrics tracking (#PR3)
+- Crawl metrics in scan results (discoveredUrls, crawlTimeMs) (#PR3)
 
 ## [1.0.0] - 2025-08-02
 
