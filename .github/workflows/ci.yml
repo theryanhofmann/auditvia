@@ -24,13 +24,13 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Run lint
-        run: pnpm run lint --if-present
+        run: pnpm run lint
 
       - name: Run type-check
-        run: pnpm run type-check --if-present
+        run: pnpm run type-check
 
       - name: Build project
-        run: pnpm run build --if-present
+        run: pnpm run build
 
       - name: Run unit tests
-        run: pnpm test --if-present -- --run
+        run: pnpm test -- --run
