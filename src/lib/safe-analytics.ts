@@ -193,6 +193,20 @@ export const scanAnalytics = {
    */
   track: (eventName: string, data: Record<string, any> = {}) => {
     safeAnalytics(eventName, data)
+  },
+
+  /**
+   * Enterprise detection event (PR #2)
+   */
+  enterpriseDetected: (params: {
+    siteId: string;
+    scanId: string;
+    discoveredUrls: number;
+    elapsedMinutes: number;
+    frontierGrowing: boolean;
+    reason: 'url_threshold' | 'time_frontier';
+  }) => {
+    safeAnalytics('enterprise.detect.v1', params)
   }
 }
 

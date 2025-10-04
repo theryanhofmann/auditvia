@@ -9,18 +9,20 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/types/database'
 import { getSchemaCapabilities } from './schema-capabilities'
-import { 
-  refreshSchemaCache, 
-   
+import {
+  refreshSchemaCache,
+
   classifyDatabaseError,
   calculateBackoffDelay,
   sleep,
   formatDatabaseError
 } from './schema-cache-recovery'
 import { scanAnalytics } from './safe-analytics'
+import { detectEnterprise, type DetectionInput } from './enterprise-detection'
+import { isEnterpriseGatingEnabled, isScanProfilesEnabled } from './feature-flags'
 
 interface ScanUpdateData {
-  status?: 'queued' | 'running' | 'completed' | 'failed'
+  status?: 'queued' | 'running' | 'completed' | 'failed' | 'incomplete_enterprise_gate'
   progress_message?: string
   error_message?: string
   ended_at?: string
@@ -500,10 +502,75 @@ export class ScanLifecycleManager {
 
       return { success: true, scan: data, isStale }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error) 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
       }
+    }
+  }
+
+  /**
+   * Check for enterprise detection and gate scan if needed (PR #2)
+   * Feature-flagged behavior for enterprise site detection
+   *
+   * @param scanId - Scan identifier
+   * @param siteId - Site identifier
+   * @param input - Detection metrics (URLs discovered, elapsed time, frontier status)
+   * @returns Result indicating if scan was gated
+   */
+  async checkEnterpriseDetection(
+    scanId: string,
+    siteId: string,
+    input: DetectionInput
+  ): Promise<{ shouldStop: boolean; reason?: string }> {
+    // Skip if feature flags disabled
+    if (!isScanProfilesEnabled() || !isEnterpriseGatingEnabled()) {
+      return { shouldStop: false }
+    }
+
+    try {
+      const result = detectEnterprise(input)
+
+      if (result.isEnterprise && result.reason) {
+        console.log(`🏢 [lifecycle] Enterprise site detected for scan ${scanId}: ${result.reason}`)
+
+        // Emit telemetry event
+        scanAnalytics.enterpriseDetected({
+          siteId,
+          scanId,
+          discoveredUrls: input.discoveredUrls,
+          elapsedMinutes: input.elapsedMinutes,
+          frontierGrowing: input.frontierGrowing,
+          reason: result.reason,
+        })
+
+        // Transition scan to incomplete_enterprise_gate status
+        const updateResult = await this.updateWithRecovery(scanId, {
+          status: 'incomplete_enterprise_gate',
+          progress_message: `Enterprise site detected (${result.reason}): ${input.discoveredUrls} URLs discovered`,
+        })
+
+        if (updateResult.success) {
+          console.log(`🏢 [lifecycle] Scan ${scanId} gated at enterprise detection`)
+          // Log lifecycle event
+          await this.logLifecycleEvent(scanId, 'enterprise_detected', {
+            reason: result.reason,
+            discovered_urls: input.discoveredUrls,
+            elapsed_minutes: input.elapsedMinutes,
+            frontier_growing: input.frontierGrowing,
+          })
+        } else {
+          console.error(`🏢 [lifecycle] Failed to gate scan ${scanId}:`, updateResult.error)
+        }
+
+        return { shouldStop: true, reason: result.reason }
+      }
+
+      return { shouldStop: false }
+    } catch (error) {
+      console.error(`🏢 [lifecycle] Error checking enterprise detection for scan ${scanId}:`, error)
+      // Don't fail the scan on detection errors - just continue
+      return { shouldStop: false }
     }
   }
 }
