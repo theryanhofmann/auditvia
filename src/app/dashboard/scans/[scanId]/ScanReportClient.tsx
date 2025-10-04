@@ -24,6 +24,8 @@ import { AISuggestionsPanel } from '@/app/components/scan/AISuggestionsPanel'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { useRouter } from 'next/navigation'
+import { EnterpriseGateModal, SAMPLE_REPORT_ANCHOR } from '@/app/components/ui/EnterpriseGateModal'
+import { isEnterpriseGatingEnabled, isScanProfilesEnabled } from '@/lib/feature-flags'
 
 interface Issue {
   id: string
@@ -134,6 +136,7 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
   const [_error, setError] = useState<string | null>(null)
   const [expandedIssues, setExpandedIssues] = useState<string[]>([])
   const [previousScan, setPreviousScan] = useState<string | null>(null)
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false)
   const router = useRouter()
 
   // Validate team access
@@ -143,6 +146,18 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
       toast.error('You do not have access to this scan')
     }
   }, [teamId, scan.team_id, teamLoading, router])
+
+  // Trigger enterprise gate modal on incomplete_enterprise_gate status
+  // Require BOTH feature flags
+  useEffect(() => {
+    if (
+      isEnterpriseGatingEnabled() &&
+      isScanProfilesEnabled() &&
+      scan.status === 'incomplete_enterprise_gate'
+    ) {
+      setShowEnterpriseModal(true)
+    }
+  }, [scan.status])
 
   // Calculate accessibility score treating inapplicable as passes
   const calculateScore = (data: typeof scan) => {
@@ -522,7 +537,11 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
 
       {/* Issues Summary */}
       {Object.keys(groupedIssues).length > 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
+        <div
+          id={SAMPLE_REPORT_ANCHOR}
+          tabIndex={-1}
+          className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+        >
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Issues Summary
           </h2>
@@ -571,6 +590,19 @@ export function ScanReportClient({ scan }: ScanReportClientProps) {
           ))}
         </div>
       </div>
+
+      {/* Enterprise Gate Modal */}
+      <EnterpriseGateModal
+        open={showEnterpriseModal}
+        onOpenChange={setShowEnterpriseModal}
+        onViewSampleReport={() => {
+          // Callback is optional - deep link handled in modal
+          toast.success('Viewing sample report')
+        }}
+        discoveredUrls={scan.total_violations + scan.passes}
+        scanId={scan.id}
+        siteId={scan.site_id}
+      />
     </div>
   )
 } 
